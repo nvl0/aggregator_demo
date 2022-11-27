@@ -1,0 +1,60 @@
+version: '3'
+services:
+  db:
+    image: postgres:14.5-alpine
+    environment:
+      POSTGRES_USER: aggregator
+      POSTGRES_PASSWORD: aggregator
+      POSTGRES_DB: aggregator
+      PGDATA: /data
+      TZ: 'GMT+5'
+    volumes:
+      - ./pg/data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U aggregator" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "127.0.0.1:5432:5432"
+  migrate:
+    depends_on:
+      db:
+        condition: service_healthy
+    image: migrate/migrate
+    volumes:
+      - ../docker/migrate:/migrations
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://aggregator:aggregator@db:5432/aggregator?sslmode=disable",
+        "up",
+        "1"
+      ]
+  aggregator:
+    image: ${NAME}:${VERSION}
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+      args:
+        VERSION: ${VERSION}
+        NAME: ${NAME}
+    command: "/app/${NAME}"
+    environment:
+      DEBUG: 'true'
+      MEASURE: 'enable'
+      POSTGRES_IP_PORT: db
+      VERSION: ${VERSION}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../app/log:/app/log
+      - ../app/config/conf.yaml:/app/conf.yaml
+      - client-shared:/client
+      - ../app/flow:/app/flow
+      - ../app/subnet-disabled:/app/subnet-disabled
+volumes:
+  client-shared:

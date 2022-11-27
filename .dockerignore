@@ -1,0 +1,7 @@
+app/bin
+*.sh
+docker/Dockerfile
+*.sql
+*.log
+docker
+*_test.go

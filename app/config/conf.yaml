@@ -1,0 +1,5 @@
+postgres:
+  user: aggregator
+  password: "aggregator"
+  url: "localhost"
+  port: "5432"
