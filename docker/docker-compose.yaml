@@ -41,7 +41,6 @@ services:
       args:
         VERSION: ${VERSION}
         NAME: ${NAME}
-    command: "/app/${NAME}"
     environment:
       DEBUG: 'true'
       MEASURE: 'enable'
