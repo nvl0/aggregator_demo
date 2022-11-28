@@ -147,12 +147,16 @@ func TestStart(t *testing.T) {
 				ts := f.ri.MockSessionWithCommit()
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(ts)
-				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return([]string{nasIP}, nil).AnyTimes()
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionListByNasIP(ts).Return(sessionMap, nil).AnyTimes()
+				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return([]string{nasIP}, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionListByNasIP(ts).Return(sessionMap, nil)
+
 				f.bi.TestBridge.Flow.EXPECT().PrepareFlow(nasIP).Return(flowStr, nil).AnyTimes()
 				f.bi.TestBridge.Traffic.EXPECT().ParseFlow(flowStr).Return(trafficMap, nil).AnyTimes()
 				f.bi.TestBridge.Traffic.EXPECT().SiftTraffic(trafficMap, sessionMap[nasIP]).Return(chunkList, nil).AnyTimes()
-				f.ri.MockRepository.Session.EXPECT().SaveChunkList(ts, chunkList).Return(nil).AnyTimes()
+
+				ts.EXPECT().CreateNewSession().Return(ts).AnyTimes()
+
+				f.ri.MockRepository.Session.EXPECT().SaveChunkList(ts.CreateNewSession(), chunkList).Return(nil)
 			},
 		},
 	}
