@@ -24,7 +24,7 @@ func TestReadFlowDirNames(t *testing.T) {
 
 	path := fmt.Sprintf("%s/%s", flowDir, dirName)
 
-	r.NoError(os.Mkdir(path, flow.UserRWE))
+	r.NoError(os.Mkdir(path, flow.AllRWX))
 
 	_, err := os.Create(fmt.Sprintf("%s/%s", path, fileName))
 	r.NoError(err)
@@ -50,7 +50,7 @@ func TestReadFileNamesInFlowDir(t *testing.T) {
 
 	path := fmt.Sprintf("%s/%s", flowDir, dirName)
 
-	r.NoError(os.Mkdir(path, flow.UserRWE))
+	r.NoError(os.Mkdir(path, flow.AllRWX))
 
 	_, err := os.Create(fmt.Sprintf("%s/%s", path, fileName))
 	r.NoError(err)
@@ -76,7 +76,7 @@ func TestMoveFlowToTempDir(t *testing.T) {
 
 	path := fmt.Sprintf("%s/%s", flowDir, dirName)
 
-	r.NoError(os.Mkdir(path, flow.UserRWE))
+	r.NoError(os.Mkdir(path, flow.AllRWX))
 
 	_, err := os.Create(fmt.Sprintf("%s/%s", path, fileName))
 	r.NoError(err)
@@ -110,11 +110,11 @@ func TestReadFlow(t *testing.T) {
 
 	path := fmt.Sprintf("%s/%s", flowDir, dirName)
 
-	r.NoError(os.Mkdir(path, flow.UserRWE))
+	r.NoError(os.Mkdir(path, flow.AllRWX))
 
 	tmpPath := fmt.Sprintf("%s/%s", path, flow.FlowTempDir)
 
-	r.NoError(os.Mkdir(tmpPath, flow.UserRWE))
+	r.NoError(os.Mkdir(tmpPath, flow.AllRWX))
 
 	fileDisabled, err := os.Create(fmt.Sprintf("%s/%s", tmpPath, fileName))
 	r.NoError(err)

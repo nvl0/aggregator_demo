@@ -63,7 +63,7 @@ func (r *flowRepository) ReadFileNamesInFlowDir(dirName string) (fileNameList []
 // MoveFlowToTempDir переместить бинарник flow из надлежащей директории в директорию tmp
 func (r *flowRepository) MoveFlowToTempDir(dirName, fileName string) error {
 	// создание директории ./tmp
-	os.Mkdir(fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir), flow.UserRWE)
+	os.Mkdir(fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir), flow.AllRWX)
 
 	return os.Rename(
 		// до nas_ip/ft-*

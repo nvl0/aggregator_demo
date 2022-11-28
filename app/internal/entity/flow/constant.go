@@ -4,8 +4,8 @@ import (
 	"io/fs"
 )
 
-// UserRWE доступы файла
-const UserRWE fs.FileMode = 0700
+// AllRWX доступы файла
+const AllRWX fs.FileMode = 0777
 
 // FlowNameSubStr имя файла с которого начинается файл flow
 const FlowNameSubStr = "ft-"

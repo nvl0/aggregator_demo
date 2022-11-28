@@ -56,13 +56,15 @@ func (u *AggregatorUsecase) Start() {
 	u.measure.Start("получение списка директорий")
 	dirNasIpList, err := u.Repository.Flow.ReadFlowDirNames()
 	if err != nil {
-		u.log.Errorln(
+		u.log.Debugln(
 			u.logPrefix(),
 			fmt.Sprintf("не удалось загрузить список nas_ip директорий; ошибка: %v", err),
 		)
 		return
 	}
 	u.measure.Stop("получение списка директорий")
+
+	u.log.Debugln(u.logPrefix(), fmt.Sprintf("количество директорий %d", len(dirNasIpList)))
 
 	wg.Wait()
 	sessionMap := <-sessChan
@@ -78,7 +80,7 @@ func (u *AggregatorUsecase) Start() {
 	// если директория не совпадет с session.NasIP
 	// то обработка будет отброшена
 	for _, nasIP := range dirNasIpList {
-		go u.aggregate(ts, &wg, nasIP, sessionMap)
+		go u.aggregate(ts.CreateNewSession(), &wg, nasIP, sessionMap)
 	}
 
 	wg.Wait()
@@ -129,11 +131,12 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 
 	sessionList, exists := sessionMap[nasIP]
 	if !exists {
-		u.log.WithFields(lf).Errorln(
+		u.log.WithFields(lf).Debugln(
 			u.logPrefix(), fmt.Sprintf("nas_ip %s отсутствует в бд", nasIP),
 		)
 		return
 	}
+	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество сессий онлайн %d", nasIP, len(sessionList)))
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
 	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
@@ -141,6 +144,7 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 		return
 	}
 	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
+	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; размер flow %d", nasIP, len([]rune(flow))))
 
 	m.Start(fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP))
 	trafficMap, err := u.Bridge.Traffic.ParseFlow(flow)
@@ -148,6 +152,7 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 		return
 	}
 	m.Stop(fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP))
+	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество трафика %d", nasIP, len(trafficMap)))
 
 	m.Start(fmt.Sprintf("%s привязка трафика к сессии", nasIP))
 	chunkList, err := u.Bridge.Traffic.SiftTraffic(trafficMap, sessionList)
@@ -155,6 +160,7 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 		return
 	}
 	m.Stop(fmt.Sprintf("%s привязка трафика к сессии", nasIP))
+	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество чанков %d", nasIP, len(chunkList)))
 
 	if err = ts.Start(); err != nil {
 		u.log.Errorln(
