@@ -1,4 +1,3 @@
-version: '3'
 services:
   db:
     image: postgres:14.5-alpine
@@ -50,10 +49,10 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ../app/log:/app/log
-      - ../app/config/conf.yaml:/app/conf.yaml
+      - ../src/log:/src/log
+      - ../src/config/conf.yaml:/src/conf.yaml
       - client-shared:/client
-      - ../app/flow:/app/flow
-      - ../app/subnet-disabled:/app/subnet-disabled
+      - ../src/flow:/src/flow
+      - ../src/subnet-disabled:/src/subnet-disabled
 volumes:
   client-shared:

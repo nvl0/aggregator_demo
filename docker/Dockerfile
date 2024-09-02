@@ -10,7 +10,7 @@ RUN apt-get update -qq \
                         libaio-dev
 
 
-COPY app ${BASE_PATH}
+COPY src ${BASE_PATH}
 WORKDIR ${BASE_PATH}
 ARG NAME
 
@@ -41,14 +41,14 @@ ENV CONF_PATH "conf.yaml"
 ENV FLOW_DIR "flow"
 ENV SUBNET_DISABLED_DIR "subnet-disabled"
 
-COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /app/${NAME}
+COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /src/${NAME}
 
-WORKDIR /app
-VOLUME ["/app/log"]
-VOLUME ["/app/flow"]
-VOLUME ["/app/subnet-disabled"]
+WORKDIR /src
+VOLUME ["/src/log"]
+VOLUME ["/src/flow"]
+VOLUME ["/src/subnet-disabled"]
 
 ARG NAME
 ENV NAME_BIN=$NAME
 
-CMD "/app/${NAME_BIN}"
+CMD "/src/${NAME_BIN}"
