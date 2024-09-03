@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:14.5-alpine
+    image: postgres:16.4-alpine
     environment:
       POSTGRES_USER: aggregator
       POSTGRES_PASSWORD: aggregator
@@ -15,23 +15,23 @@ services:
       timeout: 10s
       retries: 5
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
   migrate:
-    depends_on:
-      db:
-        condition: service_healthy
     image: migrate/migrate
-    volumes:
-      - ../docker/migrate:/migrations
     command:
       [
         "-path",
-        "/migrations",
+        "/migration",
         "-database",
         "postgres://aggregator:aggregator@db:5432/aggregator?sslmode=disable",
         "up",
         "1"
       ]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../docker/migrate:/migration
   aggregator:
     image: ${NAME}:${VERSION}
     build:
@@ -51,8 +51,5 @@ services:
     volumes:
       - ../src/log:/src/log
       - ../src/config/conf.yaml:/src/conf.yaml
-      - client-shared:/client
       - ../src/flow:/src/flow
       - ../src/subnet-disabled:/src/subnet-disabled
-volumes:
-  client-shared:

@@ -1,4 +1,4 @@
-FROM golang:1.19.3 AS build-env
+FROM golang:1.23.0 AS build-env
 ARG NAME
 ENV BASE_PATH "/go/src/${NAME}"
 
@@ -9,7 +9,6 @@ RUN apt-get update -qq \
                         libaio1 \ 
                         libaio-dev
 
-
 COPY src ${BASE_PATH}
 WORKDIR ${BASE_PATH}
 ARG NAME
@@ -17,9 +16,9 @@ ARG NAME
 RUN --mount=type=cache,id=${NAME},target=/go/pkg/mod \
 --mount=type=cache,id=${NAME}_cache,target=/root/.cache/go-build \ 
 cd cmd && \
-go build  -o ${NAME} .
+go build -o ${NAME} .
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ARG NAME
 ENV BASE_PATH "/go/src/${NAME}"
@@ -28,7 +27,7 @@ ENV TZ="Asia/Tashkent"
 ENV DEBIAN_FRONTEND=noninteractive
 RUN  apt-get update -qq \
     && apt-get install -yq \
-                        libaio1 \ 
+                        libaio1t64 \ 
                         tzdata \
                         ca-certificates \ 
                         pkg-config && \ 

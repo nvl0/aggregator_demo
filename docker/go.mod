@@ -1,1 +1,1 @@
-module docker
+module aggregator/docker
