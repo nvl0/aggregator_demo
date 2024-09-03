@@ -43,13 +43,15 @@ services:
     environment:
       DEBUG: 'true'
       MEASURE: 'enable'
-      POSTGRES_IP_PORT: db
       VERSION: ${VERSION}
+      CONF_PATH: "conf.yaml"
+      PG_URL: db
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ../src/log:/src/log
-      - ../src/config/conf.yaml:/src/conf.yaml
-      - ../src/flow:/src/flow
-      - ../src/subnet-disabled:/src/subnet-disabled
+      - ../src/log:/app/log
+      - ../src/config/conf.yaml:/app/conf.yaml
+      - ../src/flow:/app/flow
+      - ../src/subnet-disabled:/app/subnet-disabled
+    stop_grace_period: 2s
