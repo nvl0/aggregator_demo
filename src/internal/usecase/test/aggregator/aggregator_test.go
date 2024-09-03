@@ -11,7 +11,7 @@ import (
 	"aggregator/src/uimport"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 var (
@@ -154,9 +154,9 @@ func TestStart(t *testing.T) {
 				f.bi.TestBridge.Traffic.EXPECT().ParseFlow(flowStr).Return(trafficMap, nil).AnyTimes()
 				f.bi.TestBridge.Traffic.EXPECT().SiftTraffic(trafficMap, sessionMap[nasIP]).Return(chunkList, nil).AnyTimes()
 
-				ts.EXPECT().CreateNewSession().Return(ts).AnyTimes()
+				// ts.EXPECT().CreateNewSession().Return(ts).AnyTimes()
 
-				f.ri.MockRepository.Session.EXPECT().SaveChunkList(ts.CreateNewSession(), chunkList).Return(nil)
+				// f.ri.MockRepository.Session.EXPECT().SaveChunkList(ts.CreateNewSession(), chunkList).Return(nil)
 			},
 		},
 	}

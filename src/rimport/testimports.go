@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 type TestRepositoryImports struct {

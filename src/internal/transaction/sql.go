@@ -1,14 +1,12 @@
 package transaction
 
 import (
-	"log"
-
 	"github.com/jmoiron/sqlx"
 )
 
 type sqlSession struct {
-	db *sqlx.DB
-	//
+	db        *sqlx.DB
+	init      bool
 	currentTx *sqlx.Tx
 }
 
@@ -17,22 +15,41 @@ func NewSQLSession(db *sqlx.DB) Session {
 }
 
 func (t *sqlSession) Start() (err error) {
-	if t.currentTx != nil {
-		log.Fatalln("открытие транзакции при активной транзакции")
+	if t.init && t.currentTx != nil {
+		err = ErrActiveTransaction
+		return
 	}
+	t.init = true
 	t.currentTx, err = t.db.Beginx()
 	return
 }
 
-func (t *sqlSession) Rollback() error {
-	err := t.currentTx.Rollback()
-	t.currentTx = nil
-	return err
+func (t *sqlSession) Rollback() (err error) {
+	switch {
+	case !t.init:
+		err = ErrNotInit
+	case t.currentTx == nil:
+		err = ErrClosed
+	default:
+		err = t.currentTx.Rollback()
+		t.init = false
+		t.currentTx = nil
+	}
+
+	return
 }
 
-func (t *sqlSession) Commit() error {
-	err := t.currentTx.Commit()
-	return err
+func (t *sqlSession) Commit() (err error) {
+	switch {
+	case !t.init:
+		err = ErrNotInit
+	case t.currentTx == nil:
+		err = ErrClosed
+	default:
+		err = t.currentTx.Commit()
+	}
+
+	return
 }
 
 func (t *sqlSession) Tx() interface{} {
@@ -40,11 +57,7 @@ func (t *sqlSession) Tx() interface{} {
 }
 
 func (t *sqlSession) TxIsActive() bool {
-	return t.currentTx != nil
-}
-
-func (t *sqlSession) CreateNewSession() Session {
-	return NewSQLSession(t.db)
+	return t.init && t.currentTx != nil
 }
 
 type sqlSessionManager struct {

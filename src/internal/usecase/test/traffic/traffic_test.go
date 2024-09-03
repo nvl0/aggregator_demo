@@ -12,9 +12,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/yl2chen/cidranger"
+	"go.uber.org/mock/gomock"
 )
 
 var (

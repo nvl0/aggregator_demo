@@ -80,7 +80,7 @@ func (u *AggregatorUsecase) Start() {
 	// если директория не совпадет с session.NasIP
 	// то обработка будет отброшена
 	for _, nasIP := range dirNasIpList {
-		go u.aggregate(ts.CreateNewSession(), &wg, nasIP, sessionMap)
+		go u.aggregate(u.SessionManager.CreateSession(), &wg, nasIP, sessionMap)
 	}
 
 	wg.Wait()

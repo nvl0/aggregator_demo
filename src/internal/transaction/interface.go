@@ -6,7 +6,6 @@ type Session interface {
 	Commit() error
 	Tx() interface{}
 	TxIsActive() bool
-	CreateNewSession() Session
 }
 
 type SessionManager interface {
