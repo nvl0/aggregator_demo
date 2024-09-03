@@ -5,7 +5,6 @@ import (
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
-	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
@@ -173,8 +172,7 @@ func TestStart(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			sm := transaction.NewMockSessionManager(ctrl)
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), sm)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
 			ui.Usecase.Aggregator.Start()
 		})

@@ -38,7 +38,7 @@ func main() {
 
 	bi := bimport.NewEmptyBridge()
 
-	ui := uimport.NewUsecaseImports(log, ri, bi, pgSessionManager)
+	ui := uimport.NewUsecaseImports(log, ri, bi)
 
 	bi.InitBridge(
 		ui.Usecase.Flow,

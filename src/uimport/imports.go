@@ -25,7 +25,6 @@ func NewUsecaseImports(
 	log *logrus.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
-	sessionManager transaction.SessionManager,
 ) UsecaseImports {
 	config, err := config.NewConfig(os.Getenv("CONF_PATH"))
 	if err != nil {
@@ -33,7 +32,7 @@ func NewUsecaseImports(
 	}
 
 	// создание блока исключенных из подсчета адресов
-	internalNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
+	disabledNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
 		os.Getenv("SUBNET_DISABLED_DIR"), global.InternalDisabled))
 	if err != nil {
 		log.Fatalln(err)
@@ -41,12 +40,12 @@ func NewUsecaseImports(
 
 	ui := UsecaseImports{
 		Config:         config,
-		SessionManager: sessionManager,
+		SessionManager: ri.SessionManager,
 
 		Usecase: Usecase{
 			Flow:       usecase.NewFlowUsecase(log, ri),
 			Session:    usecase.NewSessionUsecase(log, ri),
-			Traffic:    usecase.NewTrafficUsecase(log, ri, bi, internalNet),
+			Traffic:    usecase.NewTrafficUsecase(log, ri, bi, disabledNet),
 			Aggregator: usecase.NewAggregatorUsecase(log, ri, bi),
 		},
 		BridgeImports: bi,

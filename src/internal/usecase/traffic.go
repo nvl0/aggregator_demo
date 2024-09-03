@@ -22,20 +22,20 @@ type TrafficUsecase struct {
 	rimport.RepositoryImports
 	*bimport.BridgeImports
 	//
-	internalNet cidranger.Ranger
+	disabledNet cidranger.Ranger
 }
 
 func NewTrafficUsecase(
 	log *logrus.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
-	internalNet cidranger.Ranger,
+	disabledNet cidranger.Ranger,
 ) *TrafficUsecase {
 	return &TrafficUsecase{
 		log:               log,
 		RepositoryImports: ri,
 		BridgeImports:     bi,
-		internalNet:       internalNet,
+		disabledNet:       disabledNet,
 	}
 }
 
@@ -84,8 +84,8 @@ func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[gl
 				}
 
 				// определение принадлежности отправителя/получателя к сети
-				isSrcInternal, _ = u.internalNet.Contains(record.SrcIP)
-				isDstInternal, _ = u.internalNet.Contains(record.DstIP)
+				isSrcInternal, _ = u.disabledNet.Contains(record.SrcIP)
+				isDstInternal, _ = u.disabledNet.Contains(record.DstIP)
 
 				switch {
 

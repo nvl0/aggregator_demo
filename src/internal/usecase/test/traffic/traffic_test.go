@@ -242,8 +242,7 @@ func TestParseFlow(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			sm := transaction.NewMockSessionManager(ctrl)
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), sm)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
 			data, err := ui.Usecase.Traffic.ParseFlow(tt.args.flow)
 			r.Equal(tt.err, err)
@@ -331,8 +330,7 @@ func TestSiftTraffic(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			sm := transaction.NewMockSessionManager(ctrl)
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), sm)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
 			data, err := ui.Usecase.Traffic.SiftTraffic(tt.args.trafficMap, tt.args.sessionList)
 			r.Equal(tt.err, err)

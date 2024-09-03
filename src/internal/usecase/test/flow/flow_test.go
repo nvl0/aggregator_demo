@@ -103,8 +103,7 @@ func TestPrepareFlow(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			sm := transaction.NewMockSessionManager(ctrl)
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), sm)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
 			data, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName)
 			r.Equal(tt.err, err)
