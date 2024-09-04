@@ -92,39 +92,39 @@ func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[gl
 				// получатель и отправитель внутри сети internal
 				case isSrcInternal && isDstInternal:
 
-					// запись получателю в download
-					trafficMap[record.SrcIPkey()] = u.countTraffic(
-						trafficMap[record.SrcIPkey()],
-						traffic.NewTrafficDownload(record.ByteSize),
-						global.Internal,
-					)
+					// // запись получателю в download
+					// trafficMap[record.SrcIPkey()] = u.countTraffic(
+					// 	trafficMap[record.SrcIPkey()],
+					// 	traffic.NewTrafficDownload(record.ByteSize),
+					// 	global.Internal,
+					// )
 
-					// запись отправителю в upload
-					trafficMap[record.DstIPkey()] = u.countTraffic(
-						trafficMap[record.DstIPkey()],
-						traffic.NewTrafficUpload(record.ByteSize),
-						global.Internal,
-					)
+					// // запись отправителю в upload
+					// trafficMap[record.DstIPkey()] = u.countTraffic(
+					// 	trafficMap[record.DstIPkey()],
+					// 	traffic.NewTrafficUpload(record.ByteSize),
+					// 	global.Internal,
+					// )
 
 				// получатель внутри сети internal
 				case isSrcInternal:
 
-					// отправитель во внешней сети
-					trafficMap[record.SrcIPkey()] = u.countTraffic(
-						trafficMap[record.SrcIPkey()],
-						traffic.NewTrafficDownload(record.ByteSize),
-						global.Internet,
-					)
+					// // отправитель во внешней сети
+					// trafficMap[record.SrcIPkey()] = u.countTraffic(
+					// 	trafficMap[record.SrcIPkey()],
+					// 	traffic.NewTrafficDownload(record.ByteSize),
+					// 	global.Internet,
+					// )
 
 				// отправитель внутри сети internal
 				case isDstInternal:
 
-					// получатель во внешней сети
-					trafficMap[record.DstIPkey()] = u.countTraffic(
-						trafficMap[record.DstIPkey()],
-						traffic.NewTrafficUpload(record.ByteSize),
-						global.Internet,
-					)
+					// // получатель во внешней сети
+					// trafficMap[record.DstIPkey()] = u.countTraffic(
+					// 	trafficMap[record.DstIPkey()],
+					// 	traffic.NewTrafficUpload(record.ByteSize),
+					// 	global.Internet,
+					// )
 				}
 			}
 		}
@@ -173,11 +173,11 @@ func (u *TrafficUsecase) countTraffic(oldTraffic map[global.ChannelID]traffic.Tr
 	// если старый трафик существует, то объединить
 	if oldTraffic != nil {
 
-		// если подсчет по каналу разрешен
-		if global.EnabledChannelIDMap[channelID] {
-			newTraffic.Merge(oldTraffic[channelID])
-			oldTraffic[channelID] = newTraffic
-		}
+		// // если подсчет по каналу разрешен
+		// if global.EnabledChannelIDMap[channelID] {
+		// 	newTraffic.Merge(oldTraffic[channelID])
+		// 	oldTraffic[channelID] = newTraffic
+		// }
 
 		return oldTraffic
 
@@ -187,11 +187,11 @@ func (u *TrafficUsecase) countTraffic(oldTraffic map[global.ChannelID]traffic.Tr
 		// новый пустой трафик по всем направлениям
 		newChannelMap := u.createNewEmptyChannelMap()
 
-		// однако, записан будет только newTraffic по своему напрвлению
-		// если подсчет по каналу разрешен
-		if global.EnabledChannelIDMap[channelID] {
-			newChannelMap[channelID] = newTraffic
-		}
+		// // однако, записан будет только newTraffic по своему напрвлению
+		// // если подсчет по каналу разрешен
+		// if global.EnabledChannelIDMap[channelID] {
+		// 	newChannelMap[channelID] = newTraffic
+		// }
 
 		return newChannelMap
 	}
@@ -201,18 +201,18 @@ func (u *TrafficUsecase) countTraffic(oldTraffic map[global.ChannelID]traffic.Tr
 func (u *TrafficUsecase) createNewEmptyChannelMap() map[global.ChannelID]traffic.Traffic {
 	channelMap := make(map[global.ChannelID]traffic.Traffic)
 
-	for _, channelID := range global.AllChannelIDList {
-		if global.EnabledChannelIDMap[channelID] {
-			channelMap[channelID] = traffic.NewEmptyTraffic()
-		}
-	}
+	// for _, channelID := range global.AllChannelIDList {
+	// 	if global.EnabledChannelIDMap[channelID] {
+	// 		channelMap[channelID] = traffic.NewEmptyTraffic()
+	// 	}
+	// }
 
 	return channelMap
 }
 
 // SiftTraffic просеивание трафика для получение чанков
 func (u *TrafficUsecase) SiftTraffic(trafficMap map[string]map[global.ChannelID]traffic.Traffic,
-	sessionList []session.Session) (chunkList []session.Chunk, err error) {
+	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
 
 	lf := logrus.Fields{
 		"nas_ip": sessionList[0].NasIP,

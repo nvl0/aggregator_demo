@@ -15,14 +15,14 @@ CREATE TABLE
     channel
     (
         channel_id SERIAL NOT NULL,
-        count_enabled BOOLEAN DEFAULT false NOT NULL,
+        enabled BOOLEAN DEFAULT false NOT NULL,
         descr CHARACTER VARYING NOT NULL,
         CONSTRAINT descr_ix1 UNIQUE (descr),
         PRIMARY KEY (channel_id)
     );
 
 INSERT INTO channel (descr) VALUES ('internal');
-INSERT INTO channel (count_enabled, descr) VALUES (true, 'external');
+INSERT INTO channel (enabled, descr) VALUES (true, 'external');
 
 CREATE TABLE
     chunk

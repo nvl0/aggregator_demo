@@ -32,8 +32,8 @@ func (u *SessionUsecase) logPrefix() string {
 
 // LoadOnlineSessionListByNasIP получение списка онлайн сессий и сортировка по nas_ip
 func (u *SessionUsecase) LoadOnlineSessionListByNasIP(ts transaction.Session) (
-	sessionMap map[string][]session.Session, err error) {
-	sessionMap = make(map[string][]session.Session)
+	sessionMap map[string][]session.OnlineSession, err error) {
+	sessionMap = make(map[string][]session.OnlineSession)
 
 	// получение списка онлайн сессий
 	sessionList, err := u.Repository.Session.LoadOnlineSessionList(ts)

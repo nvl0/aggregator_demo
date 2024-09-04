@@ -5,6 +5,7 @@
 //
 //	mockgen -destination=../internal/transaction/mocks.go -package=transaction -source=../internal/transaction/interface.go
 //
+
 // Package transaction is a generated GoMock package.
 package transaction
 

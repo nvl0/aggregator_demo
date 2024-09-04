@@ -1,7 +1,7 @@
 package session
 
-// Session сессия клиента
-type Session struct {
+// OnlineSession сессия клиента
+type OnlineSession struct {
 	SessID int    `db:"sess_id"`
 	IP     string `db:"ip"`
 	NasIP  string `db:"nas_ip"`

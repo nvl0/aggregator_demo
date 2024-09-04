@@ -17,12 +17,12 @@ func NewSessionRepository() repository.Session {
 }
 
 // LoadOnlineSessionList загрузить онлайн сессий из таблицы
-func (r *sessionRepository) LoadOnlineSessionList(ts transaction.Session) ([]session.Session, error) {
+func (r *sessionRepository) LoadOnlineSessionList(ts transaction.Session) ([]session.OnlineSession, error) {
 	sqlQuery := `
-		select s.ip, s.sess_id, s.nas_ip
-		from session s`
+		select o.ip, o.sess_id, o.nas_ip
+		from online_session o`
 
-	return gensql.Select[session.Session](SqlxTx(ts), sqlQuery)
+	return gensql.Select[session.OnlineSession](SqlxTx(ts), sqlQuery)
 }
 
 // SaveChunkList сохранить чанки по клиентской сессии

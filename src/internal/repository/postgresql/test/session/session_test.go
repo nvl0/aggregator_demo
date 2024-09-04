@@ -2,7 +2,6 @@ package session_test
 
 import (
 	"aggregator/src/config"
-	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/repository/postgresql"
 	"aggregator/src/internal/transaction"
@@ -27,33 +26,25 @@ func TestLoadOnlineSessionList(t *testing.T) {
 	repo := postgresql.NewSessionRepository()
 
 	ts := transaction.NewSQLSession(db)
-	ts.Start()
+	r.NoError(ts.Start())
 	defer ts.Rollback()
 
 	t.Run("подготовка данных", func(t *testing.T) {
-
-		sess := session.Session{
-			SessID: 1,
+		expectedData := session.OnlineSession{
+			SessID: 0,
 			IP:     "127.0.0.2",
 			NasIP:  "127.0.0.0",
 		}
 
 		_, err = postgresql.SqlxTx(ts).NamedExec(`
-			insert into session (ip, sess_id, nas_ip)
+			insert into online_session (ip, sess_id, nas_ip)
 			values (:ip, :sess_id, :nas_ip)
-		`, sess)
+		`, expectedData)
 		r.NoError(err)
 
 		t.Run("проверка данных", func(t *testing.T) {
 			data, err := repo.LoadOnlineSessionList(ts)
 			r.NoError(err)
-
-			expectedData := session.Session{
-				SessID: sess.SessID,
-				IP:     sess.IP,
-				NasIP:  sess.NasIP,
-			}
-
 			r.Contains(data, expectedData)
 		})
 	})
@@ -72,30 +63,29 @@ func TestSaveChunkList(t *testing.T) {
 	repo := postgresql.NewSessionRepository()
 
 	ts := transaction.NewSQLSession(db)
-	ts.Start()
+	r.NoError(ts.Start())
 	defer ts.Rollback()
 
-	data := session.Chunk{
-		SessID:    1,
-		ChannelID: int(global.Internet),
-		Download:  63543,
-		Upload:    4234,
-	}
-
-	chunkList := []session.Chunk{data, data}
-
 	t.Run("сохранение данных", func(t *testing.T) {
-		r.NoError(repo.SaveChunkList(ts, chunkList))
+		chunk := session.Chunk{
+			SessID:    1,
+			ChannelID: 1,
+			Download:  63543,
+			Upload:    4234,
+		}
+
+		expectedData := []session.Chunk{chunk, chunk}
+
+		r.NoError(repo.SaveChunkList(ts, expectedData))
 
 		t.Run("проверка данных", func(t *testing.T) {
-			expectedData, err := gensql.Select[session.Chunk](postgresql.SqlxTx(ts), `
+			data, err := gensql.Select[session.Chunk](postgresql.SqlxTx(ts), `
 				select sess_id, channel_id, download, upload
 				from chunk
 				where sess_id = $1 and channel_id = $2
-			`, data.SessID, data.ChannelID)
+			`, chunk.SessID, chunk.ChannelID)
 			r.NoError(err)
-
-			r.Equal(expectedData, chunkList)
+			r.Equal(data, expectedData)
 		})
 	})
 }
