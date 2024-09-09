@@ -49,6 +49,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_started
+        restart: true
     volumes:
       - ../src/log:/app/log
       - ../src/config/conf.yaml:/app/conf.yaml
