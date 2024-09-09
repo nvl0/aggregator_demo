@@ -3,10 +3,11 @@ package uimport
 import (
 	"aggregator/src/bimport"
 	"aggregator/src/config"
-	"aggregator/src/internal/entity/global"
+	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/internal/usecase"
 	"aggregator/src/rimport"
+	"aggregator/src/tools/logger"
 	"aggregator/src/tools/subnetrange"
 	"fmt"
 	"os"
@@ -32,8 +33,8 @@ func NewUsecaseImports(
 	}
 
 	// создание блока исключенных из подсчета адресов
-	disabledNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
-		os.Getenv("SUBNET_DISABLED_DIR"), global.InternalDisabled))
+	internalNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
+		os.Getenv("SUBNET_DISABLED_DIR"), flow.InternalDisabled))
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -43,10 +44,11 @@ func NewUsecaseImports(
 		SessionManager: ri.SessionManager,
 
 		Usecase: Usecase{
-			Flow:       usecase.NewFlowUsecase(log, ri),
-			Session:    usecase.NewSessionUsecase(log, ri),
-			Traffic:    usecase.NewTrafficUsecase(log, ri, bi, disabledNet),
-			Aggregator: usecase.NewAggregatorUsecase(log, ri, bi),
+			Flow:       usecase.NewFlowUsecase(logger.NewUsecaseLogger(log, "flow"), ri),
+			Session:    usecase.NewSessionUsecase(logger.NewUsecaseLogger(log, "session"), ri),
+			Channel:    usecase.NewChannelUsecase(logger.NewUsecaseLogger(log, "channel"), ri),
+			Traffic:    usecase.NewTrafficUsecase(logger.NewUsecaseLogger(log, "traffic"), ri, bi, internalNet),
+			Aggregator: usecase.NewAggregatorUsecase(logger.NewUsecaseLogger(log, "aggregator"), ri, bi),
 		},
 		BridgeImports: bi,
 	}

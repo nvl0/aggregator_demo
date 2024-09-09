@@ -31,26 +31,10 @@ func NewTestRepositoryImports(
 		SessionManager: transaction.NewMockSessionManager(ctrl),
 		MockRepository: MockRepository{
 			Session: repository.NewMockSession(ctrl),
+			Channel: repository.NewMockChannel(ctrl),
 			Flow:    repository.NewMockFlow(ctrl),
 		},
 	}
-}
-
-func (t *TestRepositoryImports) MockSession() *transaction.MockSession {
-	ts := transaction.NewMockSession(t.ctrl)
-
-	ts.EXPECT().Start().Return(nil).AnyTimes()
-	ts.EXPECT().Rollback().Return(nil).AnyTimes()
-
-	return ts
-}
-
-func (t *TestRepositoryImports) MockSessionWithCommit() *transaction.MockSession {
-	ts := t.MockSession()
-
-	ts.EXPECT().Commit().Return(nil).AnyTimes()
-
-	return ts
 }
 
 func (t *TestRepositoryImports) RepositoryImports() RepositoryImports {
@@ -59,6 +43,7 @@ func (t *TestRepositoryImports) RepositoryImports() RepositoryImports {
 		Config:         t.Config,
 		Repository: Repository{
 			Session: t.MockRepository.Session,
+			Channel: t.MockRepository.Channel,
 			Flow:    t.MockRepository.Flow,
 		},
 	}

@@ -35,7 +35,7 @@ func TestLoadChannelList(t *testing.T) {
 			Descr:   "repo_test",
 		}
 
-		expectedData.ID, err = gensql.GetNamedStruct[int](postgresql.SqlxTx(ts), `
+		expectedData.ID, err = gensql.GetNamedStruct[channel.ChannelID](postgresql.SqlxTx(ts), `
 			insert into channel (enabled, descr)
 			values (:enabled, :descr)
 			returning channel_id

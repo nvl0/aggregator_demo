@@ -28,6 +28,7 @@ func NewRepositoryImports(
 		SessionManager: sessionManager,
 		Repository: Repository{
 			Session: postgresql.NewSessionRepository(),
+			Channel: postgresql.NewChannelRepository(),
 			Flow: storage.NewFlowRepository(os.Getenv("FLOW_DIR"),
 				os.Getenv("SUBNET_DISABLED_DIR")),
 		},

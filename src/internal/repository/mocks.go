@@ -10,12 +10,51 @@
 package repository
 
 import (
+	channel "aggregator/src/internal/entity/channel"
 	session "aggregator/src/internal/entity/session"
 	transaction "aggregator/src/internal/transaction"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockChannel is a mock of Channel interface.
+type MockChannel struct {
+	ctrl     *gomock.Controller
+	recorder *MockChannelMockRecorder
+}
+
+// MockChannelMockRecorder is the mock recorder for MockChannel.
+type MockChannelMockRecorder struct {
+	mock *MockChannel
+}
+
+// NewMockChannel creates a new mock instance.
+func NewMockChannel(ctrl *gomock.Controller) *MockChannel {
+	mock := &MockChannel{ctrl: ctrl}
+	mock.recorder = &MockChannelMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
+	return m.recorder
+}
+
+// LoadChannelList mocks base method.
+func (m *MockChannel) LoadChannelList(ts transaction.Session) ([]channel.Channel, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadChannelList", ts)
+	ret0, _ := ret[0].([]channel.Channel)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadChannelList indicates an expected call of LoadChannelList.
+func (mr *MockChannelMockRecorder) LoadChannelList(ts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelList", reflect.TypeOf((*MockChannel)(nil).LoadChannelList), ts)
+}
 
 // MockSession is a mock of Session interface.
 type MockSession struct {

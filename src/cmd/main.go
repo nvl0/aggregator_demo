@@ -7,6 +7,7 @@ import (
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
+	"aggregator/src/tools/ossignal"
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
 
@@ -43,9 +44,12 @@ func main() {
 	bi.InitBridge(
 		ui.Usecase.Flow,
 		ui.Usecase.Session,
+		ui.Usecase.Channel,
 		ui.Usecase.Traffic,
 	)
 
-	cron := external.NewCron(log, ui)
-	cron.Run()
+	flagTerm := make(chan struct{})
+	go ossignal.WaitForTerm(flagTerm)
+
+	external.NewCron(log, ui).Run(flagTerm)
 }

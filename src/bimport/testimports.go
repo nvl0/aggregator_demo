@@ -19,6 +19,7 @@ func NewTestBridgeImports(
 		TestBridge: TestBridge{
 			Flow:    bridge.NewMockFlow(ctrl),
 			Session: bridge.NewMockSession(ctrl),
+			Channel: bridge.NewMockChannel(ctrl),
 			Traffic: bridge.NewMockTraffic(ctrl),
 		},
 	}
@@ -29,6 +30,7 @@ func (t *TestBridgeImports) BridgeImports() *BridgeImports {
 		Bridge: Bridge{
 			Flow:    t.TestBridge.Flow,
 			Session: t.TestBridge.Session,
+			Channel: t.TestBridge.Channel,
 			Traffic: t.TestBridge.Traffic,
 		},
 	}

@@ -10,7 +10,7 @@
 package bridge
 
 import (
-	global "aggregator/src/internal/entity/global"
+	channel "aggregator/src/internal/entity/channel"
 	session "aggregator/src/internal/entity/session"
 	traffic "aggregator/src/internal/entity/traffic"
 	transaction "aggregator/src/internal/transaction"
@@ -80,19 +80,57 @@ func (m *MockSession) EXPECT() *MockSessionMockRecorder {
 	return m.recorder
 }
 
-// LoadOnlineSessionListByNasIP mocks base method.
-func (m *MockSession) LoadOnlineSessionListByNasIP(ts transaction.Session) (map[string][]session.OnlineSession, error) {
+// LoadOnlineSessionMap mocks base method.
+func (m *MockSession) LoadOnlineSessionMap(ts transaction.Session) (map[string][]session.OnlineSession, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadOnlineSessionListByNasIP", ts)
+	ret := m.ctrl.Call(m, "LoadOnlineSessionMap", ts)
 	ret0, _ := ret[0].(map[string][]session.OnlineSession)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LoadOnlineSessionListByNasIP indicates an expected call of LoadOnlineSessionListByNasIP.
-func (mr *MockSessionMockRecorder) LoadOnlineSessionListByNasIP(ts any) *gomock.Call {
+// LoadOnlineSessionMap indicates an expected call of LoadOnlineSessionMap.
+func (mr *MockSessionMockRecorder) LoadOnlineSessionMap(ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionListByNasIP", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionListByNasIP), ts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionMap", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionMap), ts)
+}
+
+// MockChannel is a mock of Channel interface.
+type MockChannel struct {
+	ctrl     *gomock.Controller
+	recorder *MockChannelMockRecorder
+}
+
+// MockChannelMockRecorder is the mock recorder for MockChannel.
+type MockChannelMockRecorder struct {
+	mock *MockChannel
+}
+
+// NewMockChannel creates a new mock instance.
+func NewMockChannel(ctrl *gomock.Controller) *MockChannel {
+	mock := &MockChannel{ctrl: ctrl}
+	mock.recorder = &MockChannelMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
+	return m.recorder
+}
+
+// LoadChannelMap mocks base method.
+func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ChannelID]bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadChannelMap", ts)
+	ret0, _ := ret[0].(map[channel.ChannelID]bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadChannelMap indicates an expected call of LoadChannelMap.
+func (mr *MockChannelMockRecorder) LoadChannelMap(ts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelMap", reflect.TypeOf((*MockChannel)(nil).LoadChannelMap), ts)
 }
 
 // MockTraffic is a mock of Traffic interface.
@@ -119,31 +157,31 @@ func (m *MockTraffic) EXPECT() *MockTrafficMockRecorder {
 }
 
 // ParseFlow mocks base method.
-func (m *MockTraffic) ParseFlow(flow string) (map[string]map[global.ChannelID]traffic.Traffic, error) {
+func (m *MockTraffic) ParseFlow(channelMap map[channel.ChannelID]bool, flow string) (map[string]map[channel.ChannelID]traffic.Traffic, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ParseFlow", flow)
-	ret0, _ := ret[0].(map[string]map[global.ChannelID]traffic.Traffic)
+	ret := m.ctrl.Call(m, "ParseFlow", channelMap, flow)
+	ret0, _ := ret[0].(map[string]map[channel.ChannelID]traffic.Traffic)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ParseFlow indicates an expected call of ParseFlow.
-func (mr *MockTrafficMockRecorder) ParseFlow(flow any) *gomock.Call {
+func (mr *MockTrafficMockRecorder) ParseFlow(channelMap, flow any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseFlow", reflect.TypeOf((*MockTraffic)(nil).ParseFlow), flow)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseFlow", reflect.TypeOf((*MockTraffic)(nil).ParseFlow), channelMap, flow)
 }
 
 // SiftTraffic mocks base method.
-func (m *MockTraffic) SiftTraffic(trafficMap map[string]map[global.ChannelID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
+func (m *MockTraffic) SiftTraffic(channelMap map[channel.ChannelID]bool, trafficMap map[string]map[channel.ChannelID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SiftTraffic", trafficMap, sessionList)
+	ret := m.ctrl.Call(m, "SiftTraffic", channelMap, trafficMap, sessionList)
 	ret0, _ := ret[0].([]session.Chunk)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SiftTraffic indicates an expected call of SiftTraffic.
-func (mr *MockTrafficMockRecorder) SiftTraffic(trafficMap, sessionList any) *gomock.Call {
+func (mr *MockTrafficMockRecorder) SiftTraffic(channelMap, trafficMap, sessionList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SiftTraffic", reflect.TypeOf((*MockTraffic)(nil).SiftTraffic), trafficMap, sessionList)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SiftTraffic", reflect.TypeOf((*MockTraffic)(nil).SiftTraffic), channelMap, trafficMap, sessionList)
 }
