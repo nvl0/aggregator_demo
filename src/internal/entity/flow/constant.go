@@ -15,3 +15,11 @@ const FlowTempDir = "tmp"
 
 // FlowHeader заголовок flow файла
 const FlowHeader = "#:doctets,srcaddr,dstaddr"
+
+// SubnetFileName название файла с подсетями
+type SubnetFileName string
+
+const (
+	// InternalDisabled имя файла с исключенными из отчета подсетями
+	InternalDisabled SubnetFileName = "internal"
+)

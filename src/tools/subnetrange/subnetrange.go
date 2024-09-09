@@ -35,7 +35,9 @@ func CreateDisabledSubnetRange(path string) (ranger cidranger.Ranger, err error)
 			}
 
 			// добавление подсети в блок
-			ranger.Insert(cidranger.NewBasicRangerEntry(*network))
+			if err = ranger.Insert(cidranger.NewBasicRangerEntry(*network)); err != nil {
+				return
+			}
 		}
 	}
 

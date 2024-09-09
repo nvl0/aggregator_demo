@@ -2,12 +2,12 @@ package usecase
 
 import (
 	"aggregator/src/bimport"
+	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/rimport"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -22,31 +22,27 @@ type TrafficUsecase struct {
 	rimport.RepositoryImports
 	*bimport.BridgeImports
 	//
-	disabledNet cidranger.Ranger
+	internalNet cidranger.Ranger
 }
 
 func NewTrafficUsecase(
 	log *logrus.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
-	disabledNet cidranger.Ranger,
+	internalNet cidranger.Ranger,
 ) *TrafficUsecase {
 	return &TrafficUsecase{
 		log:               log,
 		RepositoryImports: ri,
 		BridgeImports:     bi,
-		disabledNet:       disabledNet,
+		internalNet:       internalNet,
 	}
 }
 
-func (u *TrafficUsecase) logPrefix() string {
-	return "[traffic_usecase]"
-}
-
 // ParseFlow парсинг flow
-func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[global.ChannelID]traffic.Traffic, err error) {
-	trafficMap = make(map[string]map[global.ChannelID]traffic.Traffic)
-
+// trafficMap map[user_ip]map[channel_id]Traffic
+func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowStr string) (
+	trafficMap map[string]map[channel.ChannelID]traffic.Traffic, err error) {
 	var (
 		// обозначение принадлежности получателя/отправителя к сети
 		isSrcInternal, isDstInternal bool
@@ -58,73 +54,83 @@ func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[gl
 		record flow.Record
 	)
 
-	// парсинг flow
-	for _, row = range strings.Split(flowStr, "\n") {
-		// при парсинге flow первая строка состоит
-		// из заголовка #:doctets,srcaddr,dstaddr
-		if strings.Contains(row, flow.FlowHeader) {
-			continue
-		}
+	// построчное разбиение flowStr
+	// flowStr представляет собой таблицу
+	flowArr := strings.Split(flowStr, "\n")
 
+	// при парсинге flow первая строка состоит
+	// из заголовка #:doctets,srcaddr,dstaddr
+	if strings.Contains(string(flowArr[0]), flow.FlowHeader) {
+		flowArr = flowArr[1:]
+	}
+
+	trafficMap = make(map[string]map[channel.ChannelID]traffic.Traffic, len(flowArr))
+
+	// парсинг flow
+	for _, row = range flowArr {
 		// ряд который содержит \t или \n не будет считан
 		if row != "" {
-
 			// определение аргументов в ряду
 			if rowArgs = strings.Split(row, ","); len(rowArgs) == 3 {
+				var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
+
 				lf := logrus.Fields{
-					"bytes":  rowArgs[0],
-					"src_ip": rowArgs[1],
-					"dst_ip": rowArgs[2],
+					"bytes":  bytes,
+					"src_ip": srcIP,
+					"dst_ip": dstIP,
 				}
 
 				// парсинг аргументов
-				if record, err = u.parseRecord(rowArgs[0], rowArgs[1], rowArgs[2]); err != nil {
-					u.log.WithFields(lf).Warnln(u.logPrefix(), flow.ErrIncorrectRecord(err))
+				if record, err = u.parseRecord(bytes, srcIP, dstIP); err != nil {
+					u.log.WithFields(lf).Warnln(flow.ErrIncorrectRecord(err))
 					continue
 				}
 
 				// определение принадлежности отправителя/получателя к сети
-				isSrcInternal, _ = u.disabledNet.Contains(record.SrcIP)
-				isDstInternal, _ = u.disabledNet.Contains(record.DstIP)
+				isSrcInternal, _ = u.internalNet.Contains(record.SrcIP)
+				isDstInternal, _ = u.internalNet.Contains(record.DstIP)
 
 				switch {
-
 				// получатель и отправитель внутри сети internal
 				case isSrcInternal && isDstInternal:
 
-					// // запись получателю в download
-					// trafficMap[record.SrcIPkey()] = u.countTraffic(
-					// 	trafficMap[record.SrcIPkey()],
-					// 	traffic.NewTrafficDownload(record.ByteSize),
-					// 	global.Internal,
-					// )
+					// запись получателю в download
+					trafficMap[record.SrcIPkey()] = u.countTraffic(
+						trafficMap[record.SrcIPkey()],
+						traffic.NewTrafficDownload(record.ByteSize),
+						channelMap,
+						channel.Internal,
+					)
 
-					// // запись отправителю в upload
-					// trafficMap[record.DstIPkey()] = u.countTraffic(
-					// 	trafficMap[record.DstIPkey()],
-					// 	traffic.NewTrafficUpload(record.ByteSize),
-					// 	global.Internal,
-					// )
+					// запись отправителю в upload
+					trafficMap[record.DstIPkey()] = u.countTraffic(
+						trafficMap[record.DstIPkey()],
+						traffic.NewTrafficUpload(record.ByteSize),
+						channelMap,
+						channel.Internal,
+					)
 
 				// получатель внутри сети internal
 				case isSrcInternal:
 
-					// // отправитель во внешней сети
-					// trafficMap[record.SrcIPkey()] = u.countTraffic(
-					// 	trafficMap[record.SrcIPkey()],
-					// 	traffic.NewTrafficDownload(record.ByteSize),
-					// 	global.Internet,
-					// )
+					// отправитель во внешней сети
+					trafficMap[record.SrcIPkey()] = u.countTraffic(
+						trafficMap[record.SrcIPkey()],
+						traffic.NewTrafficDownload(record.ByteSize),
+						channelMap,
+						channel.External,
+					)
 
 				// отправитель внутри сети internal
 				case isDstInternal:
 
-					// // получатель во внешней сети
-					// trafficMap[record.DstIPkey()] = u.countTraffic(
-					// 	trafficMap[record.DstIPkey()],
-					// 	traffic.NewTrafficUpload(record.ByteSize),
-					// 	global.Internet,
-					// )
+					// получатель во внешней сети
+					trafficMap[record.DstIPkey()] = u.countTraffic(
+						trafficMap[record.DstIPkey()],
+						traffic.NewTrafficUpload(record.ByteSize),
+						channelMap,
+						channel.External,
+					)
 				}
 			}
 		}
@@ -132,10 +138,6 @@ func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[gl
 
 	if len(trafficMap) == 0 {
 		err = global.ErrNoData
-		u.log.Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось посчитать трафик; ошибка: %v", err),
-		)
 	}
 
 	return
@@ -145,21 +147,21 @@ func (u *TrafficUsecase) ParseFlow(flowStr string) (trafficMap map[string]map[gl
 func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIpRaw, dstIpRaw string) (r flow.Record, err error) {
 	// парсинг получателя
 	if r.SrcIP = net.ParseIP(srcIpRaw); r.SrcIP == nil {
-		r = flow.Record{}
+		r.Empty()
 		err = flow.ErrUndefinedIpFormat
 		return
 	}
 
 	// парсинг отправителя
 	if r.DstIP = net.ParseIP(dstIpRaw); r.DstIP == nil {
-		r = flow.Record{}
+		r.Empty()
 		err = flow.ErrUndefinedIpFormat
 		return
 	}
 
 	// количество использованных байт
 	if r.ByteSize, err = strconv.Atoi(byteSizeRaw); err != nil {
-		r = flow.Record{}
+		r.Empty()
 		err = flow.ErrTrafficByteParse
 	}
 
@@ -167,17 +169,18 @@ func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIpRaw, dstIpRaw string) (r 
 }
 
 // countTraffic подсчет трафика по направлениям
-func (u *TrafficUsecase) countTraffic(oldTraffic map[global.ChannelID]traffic.Traffic,
-	newTraffic traffic.Traffic, channelID global.ChannelID) map[global.ChannelID]traffic.Traffic {
+func (u *TrafficUsecase) countTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
+	newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool,
+	channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
 
 	// если старый трафик существует, то объединить
 	if oldTraffic != nil {
 
-		// // если подсчет по каналу разрешен
-		// if global.EnabledChannelIDMap[channelID] {
-		// 	newTraffic.Merge(oldTraffic[channelID])
-		// 	oldTraffic[channelID] = newTraffic
-		// }
+		// если подсчет по каналу разрешен
+		if channelMap[channelID] {
+			newTraffic.Merge(oldTraffic[channelID])
+			oldTraffic[channelID] = newTraffic
+		}
 
 		return oldTraffic
 
@@ -185,48 +188,51 @@ func (u *TrafficUsecase) countTraffic(oldTraffic map[global.ChannelID]traffic.Tr
 
 		// если старого трафика не существует, то создать
 		// новый пустой трафик по всем направлениям
-		newChannelMap := u.createNewEmptyChannelMap()
+		newChannelMap := u.createNewEmptyTrafficMap(channelMap)
 
-		// // однако, записан будет только newTraffic по своему напрвлению
-		// // если подсчет по каналу разрешен
-		// if global.EnabledChannelIDMap[channelID] {
-		// 	newChannelMap[channelID] = newTraffic
-		// }
+		// однако, записан будет только newTraffic по своему напрвлению
+		// если подсчет по каналу разрешен
+		if channelMap[channelID] {
+			newChannelMap[channelID] = newTraffic
+		}
 
 		return newChannelMap
 	}
 }
 
-// createNewEmptyChannelMap создание пустого трафика по всем направлениям
-func (u *TrafficUsecase) createNewEmptyChannelMap() map[global.ChannelID]traffic.Traffic {
-	channelMap := make(map[global.ChannelID]traffic.Traffic)
+// createNewEmptyTrafficMap создание пустого трафика по всем доступным направлениям
+func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ChannelID]bool,
+) map[channel.ChannelID]traffic.Traffic {
+	trafficMap := make(map[channel.ChannelID]traffic.Traffic, len(channelMap))
 
-	// for _, channelID := range global.AllChannelIDList {
-	// 	if global.EnabledChannelIDMap[channelID] {
-	// 		channelMap[channelID] = traffic.NewEmptyTraffic()
-	// 	}
-	// }
+	for channelID, enabled := range channelMap {
+		if enabled {
+			trafficMap[channelID] = traffic.NewEmptyTraffic()
+		}
+	}
 
-	return channelMap
+	return trafficMap
 }
 
 // SiftTraffic просеивание трафика для получение чанков
-func (u *TrafficUsecase) SiftTraffic(trafficMap map[string]map[global.ChannelID]traffic.Traffic,
+func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ChannelID]bool,
+	trafficMap map[string]map[channel.ChannelID]traffic.Traffic,
 	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
 
 	lf := logrus.Fields{
 		"nas_ip": sessionList[0].NasIP,
 	}
 
-	chunkList = make([]session.Chunk, 0)
+	chunkList = make([]session.Chunk, 0, len(sessionList))
 
 	for _, sess := range sessionList {
 		// сессии у которых есть трафик будут записаны в чанки
 		channelList, exists := trafficMap[sess.IP]
+
 		if !exists {
 			// если трафика нет, то будут заполнены нулевые значения
 			// чтобы подделать активность сессии
-			channelList = u.createNewEmptyChannelMap()
+			channelList = u.createNewEmptyTrafficMap(channelMap)
 		}
 
 		for channelID, traffic := range channelList {
@@ -240,10 +246,7 @@ func (u *TrafficUsecase) SiftTraffic(trafficMap map[string]map[global.ChannelID]
 
 	if len(chunkList) == 0 {
 		err = global.ErrNoData
-		u.log.WithFields(lf).Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось просеять трафик; ошибка: %v", err),
-		)
+		u.log.WithFields(lf).Errorln("не удалось просеять трафик, ошибка", err)
 	}
 
 	return

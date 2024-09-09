@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"aggregator/src/rimport"
-	"fmt"
 
 	"github.com/sirupsen/logrus"
 )
@@ -28,11 +27,7 @@ func NewFlowUsecase(
 	}
 }
 
-func (u *FlowUsecase) logPrefix() string {
-	return "[flow_usecase]"
-}
-
-// PrepareFlow подготовка с считывание готового flow файла
+// PrepareFlow подготовка flow файла
 func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 	lf := logrus.Fields{
 		"dir_name": dirName,
@@ -43,44 +38,30 @@ func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 	fileNameListInDir, err := u.Repository.Flow.ReadFileNamesInFlowDir(dirName)
 	switch err {
 	case nil:
-
 		// перед тем как перенести flow необходимо убедиться
 		// что flow файл имеет верный формат
 		for _, fileName := range fileNameListInDir {
 			if strings.Contains(fileName, flow.FlowNameSubStr) {
-
 				// перенос flow файла в директорию ./tmp
 				if err = u.Repository.Flow.MoveFlowToTempDir(dirName, fileName); err != nil {
-					u.log.WithFields(lf).Errorln(u.logPrefix(),
-						fmt.Sprintf("не удалось переместить готовый flow в tmp; ошибка: %v", err))
+					u.log.WithFields(lf).Errorln("не удалось переместить готовый flow в tmp, ошибка", err)
 					return
 				}
 			}
 		}
 
 		// чтение flow файла с директории ./tmp
-		flowStr, err = u.Repository.Flow.ReadFlow(dirName)
-		if err != nil {
-			u.log.WithFields(lf).Errorln(
-				u.logPrefix(),
-				fmt.Sprintf("не удалось считать готовый flow с директории; ошибка: %v", err),
-			)
+		if flowStr, err = u.Repository.Flow.ReadFlow(dirName); err != nil {
+			u.log.WithFields(lf).Errorln("не удалось считать готовый flow с директории, ошибка", err)
 			err = global.ErrInternalError
 			return
 		}
 
 		return
 	case global.ErrNoData:
-		u.log.WithFields(lf).Debugln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось просмотреть директорию; ошибка: %v", err),
-		)
 		return
 	default:
-		u.log.WithFields(lf).Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось просмотреть директорию; ошибка: %v", err),
-		)
+		u.log.WithFields(lf).Errorln("не удалось просмотреть директорию, ошибка", err)
 		err = global.ErrInternalError
 		return
 	}

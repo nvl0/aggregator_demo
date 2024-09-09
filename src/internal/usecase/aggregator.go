@@ -2,10 +2,12 @@ package usecase
 
 import (
 	"aggregator/src/bimport"
+	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/measure"
+	"context"
 	"fmt"
 	"sync"
 
@@ -36,81 +38,128 @@ func NewAggregatorUsecase(
 	}
 }
 
-func (u *AggregatorUsecase) logPrefix() string {
-	return "[aggregator_usecase]"
-}
-
 // Start запуск агрегатора
-func (u *AggregatorUsecase) Start() {
-	ts := u.SessionManager.CreateSession()
+func (u *AggregatorUsecase) Start(ctx context.Context) {
+	var wg sync.WaitGroup
+	chanChan := make(chan map[channel.ChannelID]bool)
+	sessChan := make(chan map[string][]session.OnlineSession)
 
-	var (
-		wg       sync.WaitGroup
-		sessChan = make(chan map[string][]session.Session, 1)
-	)
+	wg.Add(2)
 
-	wg.Add(1)
+	// получение мапки каналов
+	go u.loadChannelMap(&wg, chanChan)
+	// получение мапки сессий
+	go u.loadOnlineSessionMap(&wg, sessChan)
 
-	go u.loadOnlineSessionListByNasIP(ts, &wg, sessChan)
+	// остановка loop
+	go func() {
+		wg.Wait()
+		close(chanChan)
+		close(sessChan)
+	}()
 
 	u.measure.Start("получение списка директорий")
-	dirNasIpList, err := u.Repository.Flow.ReadFlowDirNames()
+	dirList, err := u.Repository.Flow.ReadFlowDirNames()
 	if err != nil {
-		u.log.Debugln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось загрузить список nas_ip директорий; ошибка: %v", err),
-		)
+		u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
 		return
 	}
 	u.measure.Stop("получение списка директорий")
 
-	u.log.Debugln(u.logPrefix(), fmt.Sprintf("количество директорий %d", len(dirNasIpList)))
+	u.log.Debugf("количество директорий %d", len(dirList))
 
-	wg.Wait()
-	sessionMap := <-sessChan
-	if sessionMap == nil {
-		return
+	var (
+		channelMap                     map[channel.ChannelID]bool
+		sessionMap                     map[string][]session.OnlineSession
+		chanChanClosed, sessChanClosed bool
+	)
+
+loop:
+	for {
+		select {
+		case channelMap, chanChanClosed = <-chanChan:
+			if channelMap == nil {
+				return
+			}
+		case sessionMap, sessChanClosed = <-sessChan:
+			if sessionMap == nil {
+				return
+			}
+		default:
+			if chanChanClosed && sessChanClosed {
+				break loop
+			}
+		}
 	}
 
 	u.measure.Result()
 
-	wg.Add(len(dirNasIpList))
-
 	// название директорий совпадает с session.NasIP
 	// если директория не совпадет с session.NasIP
 	// то обработка будет отброшена
-	for _, nasIP := range dirNasIpList {
-		go u.aggregate(u.SessionManager.CreateSession(), &wg, nasIP, sessionMap)
+	wg.Add(len(dirList))
+
+	for _, nasIP := range dirList {
+		sessionList, exists := sessionMap[nasIP]
+		if !exists {
+			u.log.WithField("nas_ip", nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
+			continue
+		}
+
+		go u.Aggregate(u.SessionManager.CreateSession(), &wg, nasIP, sessionList, channelMap)
 	}
 
 	wg.Wait()
 }
 
-// loadOnlineSessionListByNasIP загрузка онлайн сессий
-func (u *AggregatorUsecase) loadOnlineSessionListByNasIP(ts transaction.Session, wg *sync.WaitGroup,
-	sessChan chan<- map[string][]session.Session) {
-
+// loadChannelMap загрузка каналов
+func (u *AggregatorUsecase) loadChannelMap(wg *sync.WaitGroup,
+	chanChan chan<- map[channel.ChannelID]bool) {
 	defer wg.Done()
 
+	ts := u.SessionManager.CreateSession()
+
 	if err := ts.Start(); err != nil {
-		u.log.Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось открыть транзакцию; ошибка: %v", err),
-		)
+		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		return
+	}
+
+	defer ts.Rollback()
+
+	chanLogName := "получение мапки каналов"
+	u.measure.Start(chanLogName)
+	defer u.measure.Stop(chanLogName)
+
+	channelMap, err := u.Bridge.Channel.LoadChannelMap(ts)
+	if err != nil {
+		u.log.Errorln("не удалось загрузить мапку каналов, ошибка", err)
+		chanChan <- nil
+		return
+	}
+
+	chanChan <- channelMap
+}
+
+// loadOnlineSessionMap загрузка онлайн сессий
+func (u *AggregatorUsecase) loadOnlineSessionMap(wg *sync.WaitGroup,
+	sessChan chan<- map[string][]session.OnlineSession) {
+	defer wg.Done()
+
+	ts := u.SessionManager.CreateSession()
+
+	if err := ts.Start(); err != nil {
+		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
 	defer ts.Rollback()
 
-	u.measure.Start("получение списка онлайн сессий")
-	defer u.measure.Stop("получение списка онлайн сессий")
+	sessLogName := "получение мапки онлайн сессий"
+	u.measure.Start(sessLogName)
+	defer u.measure.Stop(sessLogName)
 
-	sessionMap, err := u.Bridge.Session.LoadOnlineSessionListByNasIP(ts)
+	sessionMap, err := u.Bridge.Session.LoadOnlineSessionMap(ts)
 	if err != nil {
-		u.log.Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось загрузить список онлайн сессий; ошибка: %v", err),
-		)
-
+		u.log.Errorln("не удалось загрузить мапку онлайн сессий, ошибка", err)
 		sessChan <- nil
 		return
 	}
@@ -118,8 +167,9 @@ func (u *AggregatorUsecase) loadOnlineSessionListByNasIP(ts transaction.Session,
 	sessChan <- sessionMap
 }
 
-// aggregate агрегация трафика
-func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup, nasIP string, sessionMap map[string][]session.Session) {
+// Aggregate агрегация траффика
+func (u *AggregatorUsecase) Aggregate(ts transaction.Session, wg *sync.WaitGroup,
+	nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
 	defer wg.Done()
 
 	writer := measure.NewLogrusWriter(u.log)
@@ -129,14 +179,7 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 		"nas_ip": nasIP,
 	}
 
-	sessionList, exists := sessionMap[nasIP]
-	if !exists {
-		u.log.WithFields(lf).Debugln(
-			u.logPrefix(), fmt.Sprintf("nas_ip %s отсутствует в бд", nasIP),
-		)
-		return
-	}
-	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество сессий онлайн %d", nasIP, len(sessionList)))
+	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
 	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
@@ -144,48 +187,42 @@ func (u *AggregatorUsecase) aggregate(ts transaction.Session, wg *sync.WaitGroup
 		return
 	}
 	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
-	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; размер flow %d", nasIP, len([]rune(flow))))
+	u.log.WithFields(lf).Debugf("размер flow %d", len([]rune(flow)))
 
-	m.Start(fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP))
-	trafficMap, err := u.Bridge.Traffic.ParseFlow(flow)
+	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
+	m.Start(parseFlowLogName)
+	trafficMap, err := u.Bridge.Traffic.ParseFlow(channelMap, flow)
 	if err != nil {
 		return
 	}
-	m.Stop(fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP))
-	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество трафика %d", nasIP, len(trafficMap)))
+	m.Stop(parseFlowLogName)
+	u.log.WithFields(lf).Debugf("количество трафика %d", len(trafficMap))
 
-	m.Start(fmt.Sprintf("%s привязка трафика к сессии", nasIP))
-	chunkList, err := u.Bridge.Traffic.SiftTraffic(trafficMap, sessionList)
+	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
+	m.Start(siftTrafficLogName)
+	chunkList, err := u.Bridge.Traffic.SiftTraffic(channelMap, trafficMap, sessionList)
 	if err != nil {
 		return
 	}
-	m.Stop(fmt.Sprintf("%s привязка трафика к сессии", nasIP))
-	u.log.Debugln(u.logPrefix(), fmt.Sprintf("nas_ip %s; количество чанков %d", nasIP, len(chunkList)))
+	m.Stop(siftTrafficLogName)
+	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
 
 	if err = ts.Start(); err != nil {
-		u.log.Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось открыть транзакцию; ошибка: %v", err),
-		)
+		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
 	defer ts.Rollback()
 
-	m.Start(fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP))
+	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP)
+	m.Start(saveChunkListLogName)
 	if err = u.Repository.Session.SaveChunkList(ts, chunkList); err != nil {
-		u.log.WithFields(lf).Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось сохранить чанки; ошибка: %v", err),
-		)
+		u.log.WithFields(lf).Errorln("не удалось сохранить чанки, ошибка", err)
 		return
 	}
-	m.Stop(fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP))
+	m.Stop(saveChunkListLogName)
 
 	if err = ts.Commit(); err != nil {
-		u.log.Errorln(
-			u.logPrefix(),
-			fmt.Sprintf("не удалось закрыть транзакцию; ошибка: %v", err),
-		)
+		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
 		return
 	}
 

@@ -28,6 +28,12 @@ type Record struct {
 	ByteSize int    // всего байт
 }
 
+func (r *Record) Empty() {
+	r.SrcIP = nil
+	r.DstIP = nil
+	r.ByteSize = 0
+}
+
 // SrcIPkey получение строки получателя
 func (r Record) SrcIPkey() string {
 	return r.SrcIP.String()

@@ -3,7 +3,7 @@ package external
 import (
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/uimport"
-	"sync"
+	"context"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -12,7 +12,6 @@ import (
 type Cron struct {
 	log *logrus.Logger
 	uimport.UsecaseImports
-	mu *sync.Mutex
 }
 
 func NewCron(log *logrus.Logger,
@@ -20,14 +19,23 @@ func NewCron(log *logrus.Logger,
 	return &Cron{
 		log:            log,
 		UsecaseImports: u,
-		mu:             &sync.Mutex{},
 	}
 }
 
-func (c *Cron) Run() {
-	for range time.Tick(time.Second * global.AggregatorStartSeconds) {
-		c.mu.Lock()
-		c.Usecase.Aggregator.Start()
-		c.mu.Unlock()
+func (c *Cron) Run(termFlag <-chan struct{}) {
+	tick := time.NewTicker(global.StartDur)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c.Usecase.Aggregator.Start(ctx)
+
+loop:
+	for {
+		select {
+		case <-tick.C:
+			c.Usecase.Aggregator.Start(ctx)
+		case <-termFlag:
+			break loop
+		}
 	}
 }
