@@ -156,6 +156,20 @@ func (m *MockTraffic) EXPECT() *MockTrafficMockRecorder {
 	return m.recorder
 }
 
+// CountTraffic mocks base method.
+func (m *MockTraffic) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic, newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool, channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountTraffic", oldTraffic, newTraffic, channelMap, channelID)
+	ret0, _ := ret[0].(map[channel.ChannelID]traffic.Traffic)
+	return ret0
+}
+
+// CountTraffic indicates an expected call of CountTraffic.
+func (mr *MockTrafficMockRecorder) CountTraffic(oldTraffic, newTraffic, channelMap, channelID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTraffic", reflect.TypeOf((*MockTraffic)(nil).CountTraffic), oldTraffic, newTraffic, channelMap, channelID)
+}
+
 // ParseFlow mocks base method.
 func (m *MockTraffic) ParseFlow(channelMap map[channel.ChannelID]bool, flow string) (map[string]map[channel.ChannelID]traffic.Traffic, error) {
 	m.ctrl.T.Helper()

@@ -18,10 +18,8 @@ import (
 
 type TrafficUsecase struct {
 	log *logrus.Logger
-	//
 	rimport.RepositoryImports
 	*bimport.BridgeImports
-	//
 	internalNet cidranger.Ranger
 }
 
@@ -54,7 +52,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 		record flow.Record
 	)
 
-	// построчное разбиение flowStr
+	// построчная разбивка flowStr
 	// flowStr представляет собой таблицу
 	flowArr := strings.Split(flowStr, "\n")
 
@@ -95,7 +93,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isSrcInternal && isDstInternal:
 
 					// запись получателю в download
-					trafficMap[record.SrcIPkey()] = u.countTraffic(
+					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
 						trafficMap[record.SrcIPkey()],
 						traffic.NewTrafficDownload(record.ByteSize),
 						channelMap,
@@ -103,7 +101,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 					)
 
 					// запись отправителю в upload
-					trafficMap[record.DstIPkey()] = u.countTraffic(
+					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
 						trafficMap[record.DstIPkey()],
 						traffic.NewTrafficUpload(record.ByteSize),
 						channelMap,
@@ -114,7 +112,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isSrcInternal:
 
 					// отправитель во внешней сети
-					trafficMap[record.SrcIPkey()] = u.countTraffic(
+					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
 						trafficMap[record.SrcIPkey()],
 						traffic.NewTrafficDownload(record.ByteSize),
 						channelMap,
@@ -125,7 +123,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isDstInternal:
 
 					// получатель во внешней сети
-					trafficMap[record.DstIPkey()] = u.countTraffic(
+					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
 						trafficMap[record.DstIPkey()],
 						traffic.NewTrafficUpload(record.ByteSize),
 						channelMap,
@@ -168,13 +166,13 @@ func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIpRaw, dstIpRaw string) (r 
 	return
 }
 
-// countTraffic подсчет трафика по направлениям
-func (u *TrafficUsecase) countTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
+// CountTraffic подсчет трафика по направлениям
+func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
 	newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool,
 	channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
 
 	// если старый трафик существует, то объединить
-	if oldTraffic != nil {
+	if len(oldTraffic) != 0 {
 
 		// если подсчет по каналу разрешен
 		if channelMap[channelID] {
@@ -185,7 +183,6 @@ func (u *TrafficUsecase) countTraffic(oldTraffic map[channel.ChannelID]traffic.T
 		return oldTraffic
 
 	} else {
-
 		// если старого трафика не существует, то создать
 		// новый пустой трафик по всем направлениям
 		newChannelMap := u.createNewEmptyTrafficMap(channelMap)

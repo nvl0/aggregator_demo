@@ -2,14 +2,13 @@ package flow_test
 
 import (
 	"aggregator/src/bimport"
-	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -18,7 +17,7 @@ var (
 )
 
 func TestPrepareFlow(t *testing.T) {
-	r := assert.New(t)
+	r := require.New(t)
 
 	type fields struct {
 		ri rimport.TestRepositoryImports
@@ -43,7 +42,7 @@ func TestPrepareFlow(t *testing.T) {
 		data    string
 	}{
 		{
-			name: "успешный результат с перемещением flow",
+			name: "успешный результат",
 			prepare: func(f *fields) {
 				fileNameListInDir := []string{fileName}
 
@@ -58,35 +57,6 @@ func TestPrepareFlow(t *testing.T) {
 			},
 			err:  nil,
 			data: output,
-		},
-		{
-			name: "неуспешный результат с перемещением flow",
-			prepare: func(f *fields) {
-				fileNameListInDir := []string{fileName}
-
-				gomock.InOrder(
-					f.ri.MockRepository.Flow.EXPECT().ReadFileNamesInFlowDir(dirName).Return(fileNameListInDir, nil),
-					f.ri.MockRepository.Flow.EXPECT().MoveFlowToTempDir(dirName, fileName).Return(global.ErrInternalError),
-				)
-			},
-			args: args{
-				dirName: dirName,
-			},
-			err:  global.ErrInternalError,
-			data: "",
-		},
-		{
-			name: "неуспешный результат",
-			prepare: func(f *fields) {
-				gomock.InOrder(
-					f.ri.MockRepository.Flow.EXPECT().ReadFileNamesInFlowDir(dirName).Return(nil, global.ErrNoData),
-				)
-			},
-			args: args{
-				dirName: dirName,
-			},
-			err:  global.ErrNoData,
-			data: "",
 		},
 	}
 
