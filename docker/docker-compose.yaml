@@ -43,6 +43,7 @@ services:
     environment:
       DEBUG: 'true'
       MEASURE: 'enable'
+      FLOWGEN: 'true'
       VERSION: ${VERSION}
       CONF_PATH: "conf.yaml"
       PG_URL: db

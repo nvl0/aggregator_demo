@@ -56,16 +56,17 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 	// flowStr представляет собой таблицу
 	flowArr := strings.Split(flowStr, "\n")
 
-	// при парсинге flow первая строка состоит
-	// из заголовка #:doctets,srcaddr,dstaddr
-	if strings.Contains(string(flowArr[0]), flow.FlowHeader) {
-		flowArr = flowArr[1:]
-	}
-
 	trafficMap = make(map[session.IP]map[channel.ChannelID]traffic.Traffic, len(flowArr))
 
 	// парсинг flow
 	for _, row = range flowArr {
+		// flow собирается с несокльких файлов
+		// в каждом файле есть заголовок
+		// #:doctets,srcaddr,dstaddr
+		if strings.Contains(row, flow.FlowHeader) {
+			continue
+		}
+
 		// ряд который содержит \t или \n не будет считан
 		if row != "" {
 			// определение аргументов в ряду

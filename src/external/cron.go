@@ -27,9 +27,6 @@ func (c *Cron) Run(termFlag <-chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// TODO: убрать
-	c.Usecase.Aggregator.Start(ctx)
-
 loop:
 	for {
 		select {

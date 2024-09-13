@@ -134,3 +134,30 @@ func TestReadFlow(t *testing.T) {
 		r.Equal(fileData, data)
 	})
 }
+
+func TestRemoveOld(t *testing.T) {
+	r := require.New(t)
+
+	const (
+		dirName  = "test_dir"
+		fileName = "test_file"
+	)
+
+	path := fmt.Sprintf("%s/%s", flowDir, dirName)
+
+	r.NoError(os.Mkdir(path, flow.AllRWX))
+
+	_, err := os.Create(fmt.Sprintf("%s/%s", path, fileName))
+	r.NoError(err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(path)
+	})
+
+	repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
+
+	r.NoError(repo.RemoveOld(dirName))
+	data, err := os.ReadDir(path)
+	r.NoError(err)
+	r.NotContains(data, fileName)
+}

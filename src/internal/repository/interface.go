@@ -21,4 +21,5 @@ type Flow interface {
 	ReadFileNamesInFlowDir(dirName string) (fileNameList []string, err error)
 	MoveFlowToTempDir(dirName, fileName string) error
 	ReadFlow(dirName string) (output string, err error)
+	RemoveOld(nasIP string) (err error)
 }

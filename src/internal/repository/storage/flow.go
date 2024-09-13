@@ -100,3 +100,17 @@ func (r *flowRepository) ReadFlow(dirName string) (output string, err error) {
 	output = string(sumB)
 	return
 }
+
+// RemoveOld удаляет старый flow
+func (r *flowRepository) RemoveOld(nasIP string) (err error) {
+	path := fmt.Sprintf("%s/%s/%s", r.flowDirPath, nasIP, flow.FlowTempDir)
+	if err = os.RemoveAll(path); err != nil {
+		return
+	}
+	// создание директории ./tmp
+	if err = os.Mkdir(path, flow.AllRWX); err != nil {
+		return
+	}
+
+	return os.WriteFile(fmt.Sprintf("%s/%s", path, flow.GitKeepName), []byte{}, flow.AllRWX)
+}

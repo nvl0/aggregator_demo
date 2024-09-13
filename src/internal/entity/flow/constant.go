@@ -23,3 +23,6 @@ const (
 	// InternalDisabled имя файла с исключенными из отчета подсетями
 	InternalDisabled SubnetFileName = "internal"
 )
+
+// GitKeepName название файла для сохранения директорий git
+const GitKeepName = ".gitkeep"

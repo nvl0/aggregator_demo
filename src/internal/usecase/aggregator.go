@@ -5,9 +5,12 @@ import (
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/rimport"
+	"aggregator/src/tools/dump"
+	"aggregator/src/tools/flowgen"
 	"aggregator/src/tools/measure"
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -37,8 +40,25 @@ func NewAggregatorUsecase(
 	}
 }
 
+var fgen = os.Getenv("FLOWGEN") == "true"
+
 // Start запуск агрегатора
 func (u *AggregatorUsecase) Start(ctx context.Context) {
+	// генерация flow
+	if fgen {
+		if down, up, err := flowgen.Generate(); err == nil {
+			expectedChunk := session.Chunk{
+				SessID:    1,
+				ChannelID: int(channel.External),
+				Download:  down,
+				Upload:    up,
+			}
+			u.log.Debugln("ожидаемый результат", dump.Struct(expectedChunk))
+		} else {
+			u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
+		}
+	}
+
 	chanChan := make(chan map[channel.ChannelID]bool)
 	sessChan := make(chan map[session.NasIP][]session.OnlineSession)
 
@@ -187,6 +207,7 @@ func (u *AggregatorUsecase) Aggregate(wg *sync.WaitGroup, nasIP string, sessionL
 	}
 	m.Stop(siftTrafficLogName)
 	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
+	u.log.Debugln("актуальный результат", dump.Struct(chunkList))
 
 	ts := u.SessionManager.CreateSession()
 	if err = ts.Start(); err != nil {
@@ -206,6 +227,11 @@ func (u *AggregatorUsecase) Aggregate(wg *sync.WaitGroup, nasIP string, sessionL
 	if err = ts.Commit(); err != nil {
 		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
 		return
+	}
+
+	if err = u.Repository.Flow.RemoveOld(nasIP); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось удалить старый flow, ошибка", err)
+		err = nil
 	}
 
 	m.Result()

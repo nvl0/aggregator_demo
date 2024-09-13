@@ -189,3 +189,17 @@ func (mr *MockFlowMockRecorder) ReadFlowDirNames() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFlowDirNames", reflect.TypeOf((*MockFlow)(nil).ReadFlowDirNames))
 }
+
+// RemoveOld mocks base method.
+func (m *MockFlow) RemoveOld(nasIP string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveOld", nasIP)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveOld indicates an expected call of RemoveOld.
+func (mr *MockFlowMockRecorder) RemoveOld(nasIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOld", reflect.TypeOf((*MockFlow)(nil).RemoveOld), nasIP)
+}

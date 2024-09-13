@@ -176,6 +176,7 @@ func TestAggregate(t *testing.T) {
 					f.ts.EXPECT().Start().Return(nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
 					f.ts.EXPECT().Rollback().Return(nil),
 				)
 			},
