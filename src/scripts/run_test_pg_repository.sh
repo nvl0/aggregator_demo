@@ -2,7 +2,6 @@
 export DEBUG=true
 export CONF_PATH=../../../../../config/conf.yaml
 
-
 if [ -z "$1" ]
   then
     echo "Укажите название репозитория"

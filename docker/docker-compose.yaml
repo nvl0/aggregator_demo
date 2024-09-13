@@ -32,7 +32,7 @@ services:
         condition: service_healthy
     volumes:
       - ../docker/migrate:/migration
-  aggregator:
+  core:
     image: ${NAME}:${VERSION}
     build:
       context: ..
