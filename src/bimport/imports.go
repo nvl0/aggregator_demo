@@ -11,12 +11,14 @@ func (b *BridgeImports) InitBridge(
 	session bridge.Session,
 	channel bridge.Channel,
 	traffic bridge.Traffic,
+	aggregator bridge.Aggregator,
 ) {
 	b.Bridge = Bridge{
-		Flow:    flow,
-		Session: session,
-		Channel: channel,
-		Traffic: traffic,
+		Flow:       flow,
+		Session:    session,
+		Channel:    channel,
+		Traffic:    traffic,
+		Aggregator: aggregator,
 	}
 }
 

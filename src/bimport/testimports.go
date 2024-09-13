@@ -17,10 +17,11 @@ func NewTestBridgeImports(
 	return &TestBridgeImports{
 		ctrl: ctrl,
 		TestBridge: TestBridge{
-			Flow:    bridge.NewMockFlow(ctrl),
-			Session: bridge.NewMockSession(ctrl),
-			Channel: bridge.NewMockChannel(ctrl),
-			Traffic: bridge.NewMockTraffic(ctrl),
+			Flow:       bridge.NewMockFlow(ctrl),
+			Session:    bridge.NewMockSession(ctrl),
+			Channel:    bridge.NewMockChannel(ctrl),
+			Traffic:    bridge.NewMockTraffic(ctrl),
+			Aggregator: bridge.NewMockAggregator(ctrl),
 		},
 	}
 }
@@ -28,10 +29,11 @@ func NewTestBridgeImports(
 func (t *TestBridgeImports) BridgeImports() *BridgeImports {
 	return &BridgeImports{
 		Bridge: Bridge{
-			Flow:    t.TestBridge.Flow,
-			Session: t.TestBridge.Session,
-			Channel: t.TestBridge.Channel,
-			Traffic: t.TestBridge.Traffic,
+			Flow:       t.TestBridge.Flow,
+			Session:    t.TestBridge.Session,
+			Channel:    t.TestBridge.Channel,
+			Traffic:    t.TestBridge.Traffic,
+			Aggregator: t.TestBridge.Aggregator,
 		},
 	}
 }

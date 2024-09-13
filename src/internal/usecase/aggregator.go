@@ -4,7 +4,6 @@ import (
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/session"
-	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/measure"
 	"context"
@@ -40,23 +39,13 @@ func NewAggregatorUsecase(
 
 // Start запуск агрегатора
 func (u *AggregatorUsecase) Start(ctx context.Context) {
-	var wg sync.WaitGroup
 	chanChan := make(chan map[channel.ChannelID]bool)
-	sessChan := make(chan map[string][]session.OnlineSession)
-
-	wg.Add(2)
+	sessChan := make(chan map[session.NasIP][]session.OnlineSession)
 
 	// получение мапки каналов
-	go u.loadChannelMap(&wg, chanChan)
+	go u.loadChannelMap(chanChan)
 	// получение мапки сессий
-	go u.loadOnlineSessionMap(&wg, sessChan)
-
-	// остановка loop
-	go func() {
-		wg.Wait()
-		close(chanChan)
-		close(sessChan)
-	}()
+	go u.loadOnlineSessionMap(sessChan)
 
 	u.measure.Start("получение списка директорий")
 	dirList, err := u.Repository.Flow.ReadFlowDirNames()
@@ -65,65 +54,62 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		return
 	}
 	u.measure.Stop("получение списка директорий")
-
 	u.log.Debugf("количество директорий %d", len(dirList))
 
-	var (
-		channelMap                     map[channel.ChannelID]bool
-		sessionMap                     map[string][]session.OnlineSession
-		chanChanClosed, sessChanClosed bool
-	)
-
-loop:
-	for {
-		select {
-		case channelMap, chanChanClosed = <-chanChan:
-			if channelMap == nil {
-				return
-			}
-		case sessionMap, sessChanClosed = <-sessChan:
-			if sessionMap == nil {
-				return
-			}
-		default:
-			if chanChanClosed && sessChanClosed {
-				break loop
-			}
-		}
+	channelMap := <-chanChan
+	if channelMap == nil {
+		return
+	}
+	sessionMap := <-sessChan
+	if sessionMap == nil {
+		return
 	}
 
 	u.measure.Result()
 
-	// название директорий совпадает с session.NasIP
-	// если директория не совпадет с session.NasIP
-	// то обработка будет отброшена
-	wg.Add(len(dirList))
+	var wg sync.WaitGroup
+	done := make(chan struct{})
 
+	// название директории совпадает с session.NasIP
 	for _, nasIP := range dirList {
-		sessionList, exists := sessionMap[nasIP]
+
+		// если директория не совпадет с session.NasIP
+		// то обработка директории будет отброшена
+		sessionList, exists := sessionMap[session.NasIP(nasIP)]
 		if !exists {
 			u.log.WithField("nas_ip", nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
 			continue
 		}
 
-		go u.Aggregate(u.SessionManager.CreateSession(), &wg, nasIP, sessionList, channelMap)
+		wg.Add(1)
+		go u.Bridge.Aggregator.Aggregate(&wg, nasIP, sessionList, channelMap)
 	}
 
-	wg.Wait()
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+loop:
+	for {
+		select {
+		case <-done:
+			break loop
+		case <-ctx.Done():
+			break loop
+		}
+	}
 }
 
 // loadChannelMap загрузка каналов
-func (u *AggregatorUsecase) loadChannelMap(wg *sync.WaitGroup,
-	chanChan chan<- map[channel.ChannelID]bool) {
-	defer wg.Done()
+func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ChannelID]bool) {
+	defer close(chanChan)
 
 	ts := u.SessionManager.CreateSession()
-
 	if err := ts.Start(); err != nil {
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
-
 	defer ts.Rollback()
 
 	chanLogName := "получение мапки каналов"
@@ -133,7 +119,6 @@ func (u *AggregatorUsecase) loadChannelMap(wg *sync.WaitGroup,
 	channelMap, err := u.Bridge.Channel.LoadChannelMap(ts)
 	if err != nil {
 		u.log.Errorln("не удалось загрузить мапку каналов, ошибка", err)
-		chanChan <- nil
 		return
 	}
 
@@ -141,12 +126,10 @@ func (u *AggregatorUsecase) loadChannelMap(wg *sync.WaitGroup,
 }
 
 // loadOnlineSessionMap загрузка онлайн сессий
-func (u *AggregatorUsecase) loadOnlineSessionMap(wg *sync.WaitGroup,
-	sessChan chan<- map[string][]session.OnlineSession) {
-	defer wg.Done()
+func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.NasIP][]session.OnlineSession) {
+	defer close(sessChan)
 
 	ts := u.SessionManager.CreateSession()
-
 	if err := ts.Start(); err != nil {
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
@@ -160,7 +143,6 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(wg *sync.WaitGroup,
 	sessionMap, err := u.Bridge.Session.LoadOnlineSessionMap(ts)
 	if err != nil {
 		u.log.Errorln("не удалось загрузить мапку онлайн сессий, ошибка", err)
-		sessChan <- nil
 		return
 	}
 
@@ -168,8 +150,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(wg *sync.WaitGroup,
 }
 
 // Aggregate агрегация траффика
-func (u *AggregatorUsecase) Aggregate(ts transaction.Session, wg *sync.WaitGroup,
-	nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
+func (u *AggregatorUsecase) Aggregate(wg *sync.WaitGroup, nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
 	defer wg.Done()
 
 	writer := measure.NewLogrusWriter(u.log)
@@ -182,7 +163,7 @@ func (u *AggregatorUsecase) Aggregate(ts transaction.Session, wg *sync.WaitGroup
 	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
+	flow, err := u.Bridge.Flow.PrepareFlow(string(nasIP))
 	if err != nil {
 		return
 	}
@@ -207,6 +188,7 @@ func (u *AggregatorUsecase) Aggregate(ts transaction.Session, wg *sync.WaitGroup
 	m.Stop(siftTrafficLogName)
 	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
 
+	ts := u.SessionManager.CreateSession()
 	if err = ts.Start(); err != nil {
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return

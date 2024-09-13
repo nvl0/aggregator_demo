@@ -2,9 +2,9 @@ package session
 
 // OnlineSession сессия клиента
 type OnlineSession struct {
-	SessID int    `db:"sess_id"`
-	IP     string `db:"ip"`
-	NasIP  string `db:"nas_ip"`
+	SessID int   `db:"sess_id"`
+	IP     IP    `db:"ip"`
+	NasIP  NasIP `db:"nas_ip"`
 }
 
 // Chunk чанк с сформированным и отсеяным трафиком по направлению

@@ -27,13 +27,13 @@ func NewSessionUsecase(
 
 // LoadOnlineSessionMap map[nas_ip][]session.OnlineSession
 func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
-	sessionMap map[string][]session.OnlineSession, err error) {
+	sessionMap map[session.NasIP][]session.OnlineSession, err error) {
 
 	// получение списка онлайн сессий
 	sessionList, err := u.Repository.Session.LoadOnlineSessionList(ts)
 	switch err {
 	case nil:
-		sessionMap = make(map[string][]session.OnlineSession)
+		sessionMap = make(map[session.NasIP][]session.OnlineSession)
 
 		// сортировка по nas_ip
 		for _, sess := range sessionList {

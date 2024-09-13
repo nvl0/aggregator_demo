@@ -4,5 +4,5 @@ import "time"
 
 const (
 	// StartDur время, через которое агрегатор будет перезапущен
-	StartDur = 180 * time.Second
+	StartDur = 60 * time.Second
 )

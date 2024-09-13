@@ -46,6 +46,7 @@ func main() {
 		ui.Usecase.Session,
 		ui.Usecase.Channel,
 		ui.Usecase.Traffic,
+		ui.Usecase.Aggregator,
 	)
 
 	flagTerm := make(chan struct{})

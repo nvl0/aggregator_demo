@@ -27,6 +27,7 @@ func (c *Cron) Run(termFlag <-chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// TODO: убрать
 	c.Usecase.Aggregator.Start(ctx)
 
 loop:
@@ -35,6 +36,8 @@ loop:
 		case <-tick.C:
 			c.Usecase.Aggregator.Start(ctx)
 		case <-termFlag:
+			break loop
+		case <-ctx.Done():
 			break loop
 		}
 	}
