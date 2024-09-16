@@ -1,6 +1,6 @@
 package session
 
 type (
-	IP    string
-	NasIP string
+	IP    = string
+	NasIP = string
 )

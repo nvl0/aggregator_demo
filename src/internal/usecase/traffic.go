@@ -94,16 +94,16 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isSrcInternal && isDstInternal:
 
 					// запись получателю в download
-					trafficMap[session.IP(record.SrcIPkey())] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[session.IP(record.SrcIPkey())],
+					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+						trafficMap[record.SrcIPkey()],
 						traffic.NewTrafficDownload(record.ByteSize),
 						channelMap,
 						channel.Internal,
 					)
 
 					// запись отправителю в upload
-					trafficMap[session.IP(record.DstIPkey())] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[session.IP(record.DstIPkey())],
+					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+						trafficMap[record.DstIPkey()],
 						traffic.NewTrafficUpload(record.ByteSize),
 						channelMap,
 						channel.Internal,
@@ -113,8 +113,8 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isSrcInternal:
 
 					// отправитель во внешней сети
-					trafficMap[session.IP(record.SrcIPkey())] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[session.IP(record.SrcIPkey())],
+					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+						trafficMap[record.SrcIPkey()],
 						traffic.NewTrafficDownload(record.ByteSize),
 						channelMap,
 						channel.External,
@@ -124,8 +124,8 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 				case isDstInternal:
 
 					// получатель во внешней сети
-					trafficMap[session.IP(record.DstIPkey())] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[session.IP(record.DstIPkey())],
+					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+						trafficMap[record.DstIPkey()],
 						traffic.NewTrafficUpload(record.ByteSize),
 						channelMap,
 						channel.External,

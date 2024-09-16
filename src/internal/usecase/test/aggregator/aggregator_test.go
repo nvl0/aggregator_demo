@@ -72,7 +72,7 @@ func TestStart(t *testing.T) {
 
 				for _, item := range dirList {
 					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(gomock.Any(), nasIP,
-						sessionMap[session.NasIP(item)], channelMap)
+						sessionMap[item], channelMap)
 				}
 			},
 			args: args{

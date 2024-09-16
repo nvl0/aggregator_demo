@@ -95,7 +95,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 		// если директория не совпадет с session.NasIP
 		// то обработка директории будет отброшена
-		sessionList, exists := sessionMap[session.NasIP(nasIP)]
+		sessionList, exists := sessionMap[nasIP]
 		if !exists {
 			u.log.WithField("nas_ip", nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
 			continue
