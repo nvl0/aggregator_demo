@@ -122,10 +122,10 @@ func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
 }
 
 // LoadChannelMap mocks base method.
-func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ChannelID]bool, error) {
+func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ID]bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LoadChannelMap", ts)
-	ret0, _ := ret[0].(map[channel.ChannelID]bool)
+	ret0, _ := ret[0].(map[channel.ID]bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -161,10 +161,10 @@ func (m *MockTraffic) EXPECT() *MockTrafficMockRecorder {
 }
 
 // CountTraffic mocks base method.
-func (m *MockTraffic) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic, newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool, channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
+func (m *MockTraffic) CountTraffic(oldTraffic map[channel.ID]traffic.Traffic, newTraffic traffic.Traffic, channelMap map[channel.ID]bool, channelID channel.ID) map[channel.ID]traffic.Traffic {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CountTraffic", oldTraffic, newTraffic, channelMap, channelID)
-	ret0, _ := ret[0].(map[channel.ChannelID]traffic.Traffic)
+	ret0, _ := ret[0].(map[channel.ID]traffic.Traffic)
 	return ret0
 }
 
@@ -175,10 +175,10 @@ func (mr *MockTrafficMockRecorder) CountTraffic(oldTraffic, newTraffic, channelM
 }
 
 // ParseFlow mocks base method.
-func (m *MockTraffic) ParseFlow(channelMap map[channel.ChannelID]bool, flow string) (map[session.IP]map[channel.ChannelID]traffic.Traffic, error) {
+func (m *MockTraffic) ParseFlow(channelMap map[channel.ID]bool, flow string) (map[session.IP]map[channel.ID]traffic.Traffic, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ParseFlow", channelMap, flow)
-	ret0, _ := ret[0].(map[session.IP]map[channel.ChannelID]traffic.Traffic)
+	ret0, _ := ret[0].(map[session.IP]map[channel.ID]traffic.Traffic)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -190,7 +190,7 @@ func (mr *MockTrafficMockRecorder) ParseFlow(channelMap, flow any) *gomock.Call 
 }
 
 // SiftTraffic mocks base method.
-func (m *MockTraffic) SiftTraffic(channelMap map[channel.ChannelID]bool, trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
+func (m *MockTraffic) SiftTraffic(channelMap map[channel.ID]bool, trafficMap map[session.IP]map[channel.ID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SiftTraffic", channelMap, trafficMap, sessionList)
 	ret0, _ := ret[0].([]session.Chunk)
@@ -229,7 +229,7 @@ func (m *MockAggregator) EXPECT() *MockAggregatorMockRecorder {
 }
 
 // Aggregate mocks base method.
-func (m *MockAggregator) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
+func (m *MockAggregator) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ID]bool) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Aggregate", nasIP, sessionList, channelMap)
 }

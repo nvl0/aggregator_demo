@@ -66,7 +66,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		}
 	}
 
-	chanChan := make(chan map[channel.ChannelID]bool)
+	chanChan := make(chan map[channel.ID]bool)
 	sessChan := make(chan map[session.NasIP][]session.OnlineSession)
 
 	// получение мапки каналов
@@ -123,7 +123,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 }
 
 // loadChannelMap загрузка каналов
-func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ChannelID]bool) {
+func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ID]bool) {
 	defer close(chanChan)
 
 	ts := u.SessionManager.CreateSession()
@@ -174,7 +174,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 func (u *AggregatorUsecase) Aggregate(
 	nasIP string,
 	sessionList []session.OnlineSession,
-	channelMap map[channel.ChannelID]bool,
+	channelMap map[channel.ID]bool,
 ) {
 	writer := measure.NewLogrusWriter(u.log)
 	m := measure.NewMeasure(writer)

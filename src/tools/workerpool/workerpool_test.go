@@ -87,7 +87,7 @@ func TestGoLimit(t *testing.T) {
 			p := workerpool.New(tt.poolSize)
 
 			for range tt.taskCount {
-				if ok := p.Go(context.Background(), func() {
+				ok := p.Go(context.Background(), func() {
 					now := current.Add(1)
 
 					for {
@@ -99,9 +99,8 @@ func TestGoLimit(t *testing.T) {
 
 					time.Sleep(time.Millisecond)
 					current.Add(-1)
-				}); !ok {
-					t.Fatal("Go вернул false при неотмененном контексте")
-				}
+				})
+				require.True(t, ok, "Go вернул false при неотмененном контексте")
 			}
 
 			p.Wait()
@@ -122,12 +121,11 @@ func TestGoCtxCancel(t *testing.T) {
 	release := make(chan struct{})
 
 	// занимаем единственный слот пула
-	if ok := p.Go(context.Background(), func() {
+	ok := p.Go(context.Background(), func() {
 		close(started)
 		<-release
-	}); !ok {
-		t.Fatal("Go вернул false при неотмененном контексте")
-	}
+	})
+	require.True(t, ok, "Go вернул false при неотмененном контексте")
 
 	<-started
 
@@ -139,16 +137,13 @@ func TestGoCtxCancel(t *testing.T) {
 		cancel()
 	}()
 
-	if ok := p.Go(ctx, func() { executed.Store(true) }); ok {
-		t.Fatal("Go вернул true, хотя контекст был отменен во время ожидания слота")
-	}
+	ok = p.Go(ctx, func() { executed.Store(true) })
+	require.False(t, ok, "Go вернул true, хотя контекст был отменен во время ожидания слота")
 
 	close(release)
 	p.Wait()
 
-	if executed.Load() {
-		t.Fatal("fn была запущена несмотря на отмену контекста")
-	}
+	require.False(t, executed.Load(), "fn была запущена несмотря на отмену контекста")
 }
 
 // TestGoCtxAlreadyCanceled заранее отмененный контекст не запускает fn даже при свободном слоте
@@ -160,15 +155,12 @@ func TestGoCtxAlreadyCanceled(t *testing.T) {
 
 	var executed atomic.Bool
 
-	if ok := p.Go(ctx, func() { executed.Store(true) }); ok {
-		t.Fatal("Go вернул true при заранее отмененном контексте")
-	}
+	ok := p.Go(ctx, func() { executed.Store(true) })
+	require.False(t, ok, "Go вернул true при заранее отмененном контексте")
 
 	p.Wait()
 
-	if executed.Load() {
-		t.Fatal("fn была запущена при заранее отмененном контексте")
-	}
+	require.False(t, executed.Load(), "fn была запущена при заранее отмененном контексте")
 }
 
 // TestWait дожидается завершения всех уже запущенных горутин
@@ -180,17 +172,13 @@ func TestWait(t *testing.T) {
 	p := workerpool.New(4)
 
 	for range taskCount {
-		if ok := p.Go(context.Background(), func() {
+		ok := p.Go(context.Background(), func() {
 			time.Sleep(5 * time.Millisecond)
 			done.Add(1)
-		}); !ok {
-			t.Fatal("Go вернул false при неотмененном контексте")
-		}
+		})
+		require.True(t, ok, "Go вернул false при неотмененном контексте")
 	}
 
 	p.Wait()
-
-	if got := done.Load(); got != taskCount {
-		t.Fatalf("завершилось %d горутин, ожидалось %d", got, taskCount)
-	}
+	require.EqualValues(t, taskCount, done.Load(), "завершилось не столько горутин, сколько ожидалось")
 }

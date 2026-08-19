@@ -46,7 +46,7 @@ func TestStart(t *testing.T) {
 		{
 			name: "успешный результат",
 			prepare: func(f *fields) {
-				channelMap := map[channel.ChannelID]bool{
+				channelMap := map[channel.ID]bool{
 					channel.Internal: true,
 					channel.External: false,
 				}
@@ -81,7 +81,7 @@ func TestStart(t *testing.T) {
 		{
 			name: "контекст отменен, рассылка не выполняется",
 			prepare: func(f *fields) {
-				channelMap := map[channel.ChannelID]bool{
+				channelMap := map[channel.ID]bool{
 					channel.Internal: true,
 					channel.External: false,
 				}
@@ -141,7 +141,7 @@ func TestAggregate(t *testing.T) {
 	type args struct {
 		nasIP       string
 		sessionList []session.OnlineSession
-		channelMap  map[channel.ChannelID]bool
+		channelMap  map[channel.ID]bool
 	}
 
 	const (
@@ -168,11 +168,11 @@ func TestAggregate(t *testing.T) {
 7856,127.0.0.1,34.249.117.10
 221,34.249.117.10,127.0.0.1`
 
-				channelMap := map[channel.ChannelID]bool{
+				channelMap := map[channel.ID]bool{
 					channel.Internal: true,
 					channel.External: false,
 				}
-				trafficMap := map[session.IP]map[channel.ChannelID]traffic.Traffic{
+				trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
 					ip1: {
 						channel.Internal: {
 							Download: 366,
@@ -223,7 +223,7 @@ func TestAggregate(t *testing.T) {
 						IP:     ip1,
 					},
 				},
-				channelMap: map[channel.ChannelID]bool{
+				channelMap: map[channel.ID]bool{
 					channel.Internal: true,
 					channel.External: false,
 				},

@@ -42,8 +42,8 @@ func NewTrafficUsecase(
 
 // ParseFlow парсинг flow
 // trafficMap map[user_ip]map[channel_id]Traffic
-func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowStr string) (
-	trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic, err error) {
+func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr string) (
+	trafficMap map[session.IP]map[channel.ID]traffic.Traffic, err error) {
 	var (
 		// обозначение принадлежности получателя/отправителя к сети
 		isSrcInternal, isDstInternal bool
@@ -59,7 +59,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 	// flowStr представляет собой таблицу
 	flowArr := strings.Split(flowStr, "\n")
 
-	trafficMap = make(map[session.IP]map[channel.ChannelID]traffic.Traffic, len(flowArr))
+	trafficMap = make(map[session.IP]map[channel.ID]traffic.Traffic, len(flowArr))
 
 	// парсинг flow
 	for _, row = range flowArr {
@@ -171,9 +171,9 @@ func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIPRaw, dstIPRaw string) (r 
 }
 
 // CountTraffic подсчет трафика по направлениям
-func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
-	newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool,
-	channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
+func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ID]traffic.Traffic,
+	newTraffic traffic.Traffic, channelMap map[channel.ID]bool,
+	channelID channel.ID) map[channel.ID]traffic.Traffic {
 	// если старый трафик существует, то объединить
 	if len(oldTraffic) != 0 {
 		// если подсчет по каналу разрешен
@@ -199,9 +199,9 @@ func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ChannelID]traffic.T
 }
 
 // createNewEmptyTrafficMap создание пустого трафика по всем доступным направлениям
-func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ChannelID]bool,
-) map[channel.ChannelID]traffic.Traffic {
-	trafficMap := make(map[channel.ChannelID]traffic.Traffic, len(channelMap))
+func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ID]bool,
+) map[channel.ID]traffic.Traffic {
+	trafficMap := make(map[channel.ID]traffic.Traffic, len(channelMap))
 
 	for channelID, enabled := range channelMap {
 		if enabled {
@@ -213,8 +213,8 @@ func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.Channel
 }
 
 // SiftTraffic просеивание трафика для получение чанков
-func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ChannelID]bool,
-	trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic,
+func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ID]bool,
+	trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
 	lf := logrus.Fields{
 		"nas_ip": sessionList[0].NasIP,

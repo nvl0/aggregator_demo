@@ -28,12 +28,12 @@ func NewChannelUsecase(
 
 // LoadChannelMap map[channel_id]enabled
 func (u *ChannelUsecase) LoadChannelMap(ts transaction.Session) (
-	channelMap map[channel.ChannelID]bool, err error) {
+	channelMap map[channel.ID]bool, err error) {
 	// получение списка каналов
 	channelList, err := u.Repository.Channel.LoadChannelList(ts)
 	switch {
 	case err == nil:
-		channelMap = make(map[channel.ChannelID]bool, len(channelList))
+		channelMap = make(map[channel.ID]bool, len(channelList))
 
 		for _, ch := range channelList {
 			channelMap[ch.ID] = ch.Enabled

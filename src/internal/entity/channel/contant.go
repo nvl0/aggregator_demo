@@ -1,12 +1,10 @@
 package channel
 
-// ChannelID id канала
+// ID id канала
 // определяющего направление трафика
-//
-//nolint:revive // переименование в ID потребовало бы правки всех 12 файлов, использующих channel.ChannelID как публичный тип
-type ChannelID int
+type ID int
 
 const (
-	Internal ChannelID = iota + 1
+	Internal ID = iota + 1
 	External
 )

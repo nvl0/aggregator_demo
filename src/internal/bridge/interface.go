@@ -18,20 +18,20 @@ type Session interface {
 
 type Channel interface {
 	LoadChannelMap(ts transaction.Session) (
-		channelMap map[channel.ChannelID]bool, err error)
+		channelMap map[channel.ID]bool, err error)
 }
 
 type Traffic interface {
-	ParseFlow(channelMap map[channel.ChannelID]bool, flow string) (
-		trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic, err error)
-	CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
-		newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool,
-		channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic
-	SiftTraffic(channelMap map[channel.ChannelID]bool, trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic,
+	ParseFlow(channelMap map[channel.ID]bool, flow string) (
+		trafficMap map[session.IP]map[channel.ID]traffic.Traffic, err error)
+	CountTraffic(oldTraffic map[channel.ID]traffic.Traffic,
+		newTraffic traffic.Traffic, channelMap map[channel.ID]bool,
+		channelID channel.ID) map[channel.ID]traffic.Traffic
+	SiftTraffic(channelMap map[channel.ID]bool, trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 		sessionList []session.OnlineSession) (chunkList []session.Chunk, err error)
 }
 
 type Aggregator interface {
 	Aggregate(nasIP string, sessionList []session.OnlineSession,
-		channelMap map[channel.ChannelID]bool)
+		channelMap map[channel.ID]bool)
 }
