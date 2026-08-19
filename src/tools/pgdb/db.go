@@ -7,7 +7,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// SqlxDB get db link.
+// SqlxDB возвращает подключение к бд.
 // maxOpenConns ограничивает количество одновременно открытых соединений с бд,
 // значение рассчитывается как размер пула воркеров + 2 стартовых запроса.
 func SqlxDB(URL string, maxOpenConns int) *sqlx.DB {
