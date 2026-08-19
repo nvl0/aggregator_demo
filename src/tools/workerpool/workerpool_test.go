@@ -10,16 +10,24 @@ import (
 
 // TestGoLimit количество одновременно работающих горутин не превышает размер пула
 func TestGoLimit(t *testing.T) {
+	assertMaxPeak := func(wantMax int32) func(t *testing.T, peak int32) {
+		return func(t *testing.T, peak int32) {
+			if peak > wantMax {
+				t.Fatalf("одновременно работало %d горутин, ожидалось не больше %d", peak, wantMax)
+			}
+		}
+	}
+
 	tests := []struct {
-		name      string
-		poolSize  int
-		taskCount int
-		wantMax   int32
+		name       string
+		poolSize   int
+		taskCount  int
+		assertFunc func(t *testing.T, peak int32)
 	}{
-		{name: "пул меньше числа задач", poolSize: 3, taskCount: 50, wantMax: 3},
-		{name: "пул больше числа задач", poolSize: 10, taskCount: 4, wantMax: 4},
-		{name: "нулевой размер приводится к единице", poolSize: 0, taskCount: 10, wantMax: 1},
-		{name: "отрицательный размер приводится к единице", poolSize: -5, taskCount: 10, wantMax: 1},
+		{name: "пул меньше числа задач", poolSize: 3, taskCount: 50, assertFunc: assertMaxPeak(3)},
+		{name: "пул больше числа задач", poolSize: 10, taskCount: 4, assertFunc: assertMaxPeak(4)},
+		{name: "нулевой размер приводится к единице", poolSize: 0, taskCount: 10, assertFunc: assertMaxPeak(1)},
+		{name: "отрицательный размер приводится к единице", poolSize: -5, taskCount: 10, assertFunc: assertMaxPeak(1)},
 	}
 
 	for _, tt := range tests {
@@ -48,9 +56,7 @@ func TestGoLimit(t *testing.T) {
 
 			p.Wait()
 
-			if got := peak.Load(); got > tt.wantMax {
-				t.Fatalf("одновременно работало %d горутин, ожидалось не больше %d", got, tt.wantMax)
-			}
+			tt.assertFunc(t, peak.Load())
 
 			if got := current.Load(); got != 0 {
 				t.Fatalf("после Wait осталось %d незавершенных горутин", got)
