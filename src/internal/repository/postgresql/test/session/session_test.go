@@ -20,7 +20,7 @@ func TestLoadOnlineSessionList(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(conf)
 
-	db := pgdb.SqlxDB(conf.PostgresURL())
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	r.NoError(db.Ping())
 
 	repo := postgresql.NewSessionRepository()
@@ -57,7 +57,7 @@ func TestSaveChunkList(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(conf)
 
-	db := pgdb.SqlxDB(conf.PostgresURL())
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	r.NoError(db.Ping())
 
 	repo := postgresql.NewSessionRepository()

@@ -7,11 +7,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// SqlxDB get db link
-func SqlxDB(URL string) *sqlx.DB {
+// SqlxDB get db link.
+// maxOpenConns ограничивает количество одновременно открытых соединений с бд,
+// значение рассчитывается как размер пула воркеров + 2 стартовых запроса.
+func SqlxDB(URL string, maxOpenConns int) *sqlx.DB {
 	db, err := sqlx.Connect("postgres", URL)
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	db.SetMaxOpenConns(maxOpenConns)
+
 	return db
 }

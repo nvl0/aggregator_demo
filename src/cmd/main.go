@@ -28,7 +28,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	pgDB := pgdb.SqlxDB(conf.PostgresURL())
+	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	if err := pgDB.Ping(); err != nil {
 		log.Fatalln(err)
 	}
