@@ -7,6 +7,9 @@ export FLOW_DIR=../../../../flow
 export SUBNET_DISABLED_DIR=../../../../subnet-disabled
 
 go clean -testcache
+echo '-- тест tools --'
+(cd ../tools/workerpool && go test -race -failfast .)
+
 cd ../internal/
 echo '-- тест usecase --'
 export CONF_PATH=../../../../config/conf.yaml
