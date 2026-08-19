@@ -1,4 +1,4 @@
-FROM golang:1.23.1 AS build-env
+FROM golang:1.26.5 AS build-env
 ARG NAME
 ENV BASE_PATH "/go/src/${NAME}"
 
