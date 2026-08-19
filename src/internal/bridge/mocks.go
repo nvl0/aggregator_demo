@@ -15,7 +15,6 @@ import (
 	traffic "aggregator/src/internal/entity/traffic"
 	transaction "aggregator/src/internal/transaction"
 	reflect "reflect"
-	sync "sync"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -24,6 +23,7 @@ import (
 type MockFlow struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowMockRecorder is the mock recorder for MockFlow.
@@ -62,6 +62,7 @@ func (mr *MockFlowMockRecorder) PrepareFlow(dirName any) *gomock.Call {
 type MockSession struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionMockRecorder
+	isgomock struct{}
 }
 
 // MockSessionMockRecorder is the mock recorder for MockSession.
@@ -100,6 +101,7 @@ func (mr *MockSessionMockRecorder) LoadOnlineSessionMap(ts any) *gomock.Call {
 type MockChannel struct {
 	ctrl     *gomock.Controller
 	recorder *MockChannelMockRecorder
+	isgomock struct{}
 }
 
 // MockChannelMockRecorder is the mock recorder for MockChannel.
@@ -138,6 +140,7 @@ func (mr *MockChannelMockRecorder) LoadChannelMap(ts any) *gomock.Call {
 type MockTraffic struct {
 	ctrl     *gomock.Controller
 	recorder *MockTrafficMockRecorder
+	isgomock struct{}
 }
 
 // MockTrafficMockRecorder is the mock recorder for MockTraffic.
@@ -205,6 +208,7 @@ func (mr *MockTrafficMockRecorder) SiftTraffic(channelMap, trafficMap, sessionLi
 type MockAggregator struct {
 	ctrl     *gomock.Controller
 	recorder *MockAggregatorMockRecorder
+	isgomock struct{}
 }
 
 // MockAggregatorMockRecorder is the mock recorder for MockAggregator.
@@ -225,13 +229,13 @@ func (m *MockAggregator) EXPECT() *MockAggregatorMockRecorder {
 }
 
 // Aggregate mocks base method.
-func (m *MockAggregator) Aggregate(wg *sync.WaitGroup, nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
+func (m *MockAggregator) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Aggregate", wg, nasIP, sessionList, channelMap)
+	m.ctrl.Call(m, "Aggregate", nasIP, sessionList, channelMap)
 }
 
 // Aggregate indicates an expected call of Aggregate.
-func (mr *MockAggregatorMockRecorder) Aggregate(wg, nasIP, sessionList, channelMap any) *gomock.Call {
+func (mr *MockAggregatorMockRecorder) Aggregate(nasIP, sessionList, channelMap any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), wg, nasIP, sessionList, channelMap)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), nasIP, sessionList, channelMap)
 }

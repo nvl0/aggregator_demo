@@ -8,10 +8,10 @@ import (
 	"aggregator/src/tools/dump"
 	"aggregator/src/tools/flowgen"
 	"aggregator/src/tools/measure"
+	"aggregator/src/tools/workerpool"
 	"context"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +19,8 @@ import (
 type AggregatorUsecase struct {
 	measure measure.Measure
 	log     *logrus.Logger
+	// poolSize размер пула воркеров агрегации
+	poolSize int
 	//
 	rimport.RepositoryImports
 	*bimport.BridgeImports
@@ -35,6 +37,7 @@ func NewAggregatorUsecase(
 	return &AggregatorUsecase{
 		measure:           m,
 		log:               log,
+		poolSize:          ri.Config.WorkerPoolSize(),
 		RepositoryImports: ri,
 		BridgeImports:     bi,
 	}
@@ -87,8 +90,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	u.measure.Result()
 
-	var wg sync.WaitGroup
-	done := make(chan struct{})
+	pool := workerpool.New(u.poolSize)
 
 	// название директории совпадает с session.NasIP
 	for _, nasIP := range dirList {
@@ -101,24 +103,22 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 			continue
 		}
 
-		wg.Add(1)
-		go u.Bridge.Aggregator.Aggregate(&wg, nasIP, sessionList, channelMap)
-	}
+		// копия переменной цикла для замыкания, go 1.19 переиспользует переменную for.
+		// sessionList копировать не нужно, она объявлена внутри тела цикла
+		nasIP := nasIP
 
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-loop:
-	for {
-		select {
-		case <-done:
-			break loop
-		case <-ctx.Done():
-			break loop
+		// если контекст отменился во время ожидания свободного слота,
+		// рассылка оставшихся nas_ip прекращается
+		if !pool.Go(ctx, func() {
+			u.Bridge.Aggregator.Aggregate(nasIP, sessionList, channelMap)
+		}) {
+			u.log.Debugln("контекст отменен, рассылка оставшихся nas_ip прекращена")
+			break
 		}
 	}
+
+	// уже стартовавшие воркеры не прерываются на середине
+	pool.Wait()
 }
 
 // loadChannelMap загрузка каналов
@@ -170,9 +170,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 }
 
 // Aggregate агрегация траффика
-func (u *AggregatorUsecase) Aggregate(wg *sync.WaitGroup, nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
-	defer wg.Done()
-
+func (u *AggregatorUsecase) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
 	writer := measure.NewLogrusWriter(u.log)
 	m := measure.NewMeasure(writer)
 

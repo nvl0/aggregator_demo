@@ -10,9 +10,7 @@ import (
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
 	"context"
-	"sync"
 	"testing"
-	"time"
 
 	"go.uber.org/mock/gomock"
 )
@@ -37,8 +35,8 @@ func TestStart(t *testing.T) {
 		sessID = 1
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
+	canceledCtx, cancelNow := context.WithCancel(context.Background())
+	cancelNow()
 
 	tests := []struct {
 		name    string
@@ -71,12 +69,43 @@ func TestStart(t *testing.T) {
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
 				for _, item := range dirList {
-					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(gomock.Any(), nasIP,
+					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(nasIP,
 						sessionMap[item], channelMap)
 				}
 			},
 			args: args{
-				ctx: ctx,
+				ctx: context.Background(),
+			},
+		},
+		{
+			name: "контекст отменен, рассылка не выполняется",
+			prepare: func(f *fields) {
+				channelMap := map[channel.ChannelID]bool{
+					channel.Internal: true,
+				}
+				sessionMap := map[session.NasIP][]session.OnlineSession{
+					nasIP: {
+						{
+							SessID: sessID,
+							NasIP:  nasIP,
+							IP:     ip1,
+						},
+					},
+				}
+				dirList := []string{nasIP}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(f.ts).Return(channelMap, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
+
+				// Aggregate не ожидается: пул возвращает false на отмененном контексте
+			},
+			args: args{
+				ctx: canceledCtx,
 			},
 		},
 	}
@@ -211,10 +240,7 @@ func TestAggregate(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
-			var wg sync.WaitGroup
-			wg.Add(1)
-
-			ui.Usecase.Aggregator.Aggregate(&wg, tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
+			ui.Usecase.Aggregator.Aggregate(tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
 		})
 	}
 }

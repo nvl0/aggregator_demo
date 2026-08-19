@@ -5,7 +5,6 @@ import (
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/internal/transaction"
-	"sync"
 )
 
 type Flow interface {
@@ -33,6 +32,6 @@ type Traffic interface {
 }
 
 type Aggregator interface {
-	Aggregate(wg *sync.WaitGroup, nasIP string, sessionList []session.OnlineSession,
+	Aggregate(nasIP string, sessionList []session.OnlineSession,
 		channelMap map[channel.ChannelID]bool)
 }
