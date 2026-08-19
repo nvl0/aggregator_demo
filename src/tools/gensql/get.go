@@ -3,6 +3,7 @@ package gensql
 import (
 	"aggregator/src/internal/entity/global"
 	"database/sql"
+	"errors"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -12,14 +13,14 @@ func Get[T any](tx *sqlx.Tx, sqlQuery string, params ...interface{}) (t T, err e
 
 	err = tx.Get(&data, sqlQuery, params...)
 
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, nil
-	case sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		err = global.ErrNoData
-		return
+		return t, err
 	default:
-		return
+		return t, err
 	}
 }
 
@@ -28,19 +29,19 @@ func GetNamed[T any](tx *sqlx.Tx, sqlQuery string, params map[string]interface{}
 
 	stmt, err := tx.PrepareNamed(sqlQuery)
 	if err != nil {
-		return
+		return t, err
 	}
 	defer stmt.Close()
 
 	err = stmt.Get(&data, params)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, nil
-	case sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		err = global.ErrNoData
-		return
+		return t, err
 	default:
-		return
+		return t, err
 	}
 }
 
@@ -49,18 +50,18 @@ func GetNamedStruct[T any, S any](tx *sqlx.Tx, sqlQuery string, s S) (t T, err e
 
 	stmt, err := tx.PrepareNamed(sqlQuery)
 	if err != nil {
-		return
+		return t, err
 	}
 	defer stmt.Close()
 
 	err = stmt.Get(&data, s)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, nil
-	case sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		err = global.ErrNoData
-		return
+		return t, err
 	default:
-		return
+		return t, err
 	}
 }

@@ -2,3 +2,5 @@ postgres:
   user: aggregator
   password: aggregator
   url: localhost:5432
+worker_pool:
+  size: 10

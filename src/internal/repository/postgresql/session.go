@@ -33,15 +33,15 @@ func (r *sessionRepository) SaveChunkList(ts transaction.Session, chunkList []se
 		insert into chunk (sess_id, channel_id, upload, download)
 		values (:sess_id, :channel_id, :upload, :download)
 	`); err != nil {
-		return
+		return err
 	}
 	defer stmt.Close()
 
 	for _, chunk := range chunkList {
 		if _, err = stmt.Exec(&chunk); err != nil {
-			return
+			return err
 		}
 	}
 
-	return
+	return err
 }

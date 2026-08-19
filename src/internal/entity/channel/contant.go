@@ -1,10 +1,10 @@
 package channel
 
-// ChannelID id канала
+// ID id канала
 // определяющего направление трафика
-type ChannelID int
+type ID int
 
 const (
-	Internal ChannelID = iota + 1
+	Internal ID = iota + 1
 	External
 )

@@ -14,9 +14,9 @@ func (f *Flow) IsEmpty() bool {
 }
 
 // NewFlow конструктор
-func NewFlow(nasIp, output string) Flow {
+func NewFlow(nasIP, output string) Flow {
 	return Flow{
-		NasIP:  nasIp,
+		NasIP:  nasIP,
 		Output: output,
 	}
 }
@@ -35,11 +35,11 @@ func (r *Record) Empty() {
 }
 
 // SrcIPkey получение строки получателя
-func (r Record) SrcIPkey() string {
+func (r *Record) SrcIPkey() string {
 	return r.SrcIP.String()
 }
 
 // DstIPkey получение строки отправителя
-func (r Record) DstIPkey() string {
+func (r *Record) DstIPkey() string {
 	return r.DstIP.String()
 }

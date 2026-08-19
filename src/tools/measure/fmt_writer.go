@@ -1,15 +1,19 @@
 package measure
 
-import "fmt"
+import (
+	"log/slog"
+	"os"
+)
 
 type fmtWriter struct {
+	log *slog.Logger
 }
 
 // NewFmtWriter писать в логи fmt
 func NewFmtWriter() Writer {
-	return &fmtWriter{}
+	return &fmtWriter{log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
 }
 
 func (l *fmtWriter) Write(msg string) {
-	fmt.Println(msg)
+	l.log.Info(msg)
 }

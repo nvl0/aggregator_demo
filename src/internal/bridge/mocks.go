@@ -15,7 +15,6 @@ import (
 	traffic "aggregator/src/internal/entity/traffic"
 	transaction "aggregator/src/internal/transaction"
 	reflect "reflect"
-	sync "sync"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -24,6 +23,7 @@ import (
 type MockFlow struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowMockRecorder is the mock recorder for MockFlow.
@@ -62,6 +62,7 @@ func (mr *MockFlowMockRecorder) PrepareFlow(dirName any) *gomock.Call {
 type MockSession struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionMockRecorder
+	isgomock struct{}
 }
 
 // MockSessionMockRecorder is the mock recorder for MockSession.
@@ -100,6 +101,7 @@ func (mr *MockSessionMockRecorder) LoadOnlineSessionMap(ts any) *gomock.Call {
 type MockChannel struct {
 	ctrl     *gomock.Controller
 	recorder *MockChannelMockRecorder
+	isgomock struct{}
 }
 
 // MockChannelMockRecorder is the mock recorder for MockChannel.
@@ -120,10 +122,10 @@ func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
 }
 
 // LoadChannelMap mocks base method.
-func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ChannelID]bool, error) {
+func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ID]bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LoadChannelMap", ts)
-	ret0, _ := ret[0].(map[channel.ChannelID]bool)
+	ret0, _ := ret[0].(map[channel.ID]bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -138,6 +140,7 @@ func (mr *MockChannelMockRecorder) LoadChannelMap(ts any) *gomock.Call {
 type MockTraffic struct {
 	ctrl     *gomock.Controller
 	recorder *MockTrafficMockRecorder
+	isgomock struct{}
 }
 
 // MockTrafficMockRecorder is the mock recorder for MockTraffic.
@@ -158,10 +161,10 @@ func (m *MockTraffic) EXPECT() *MockTrafficMockRecorder {
 }
 
 // CountTraffic mocks base method.
-func (m *MockTraffic) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic, newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool, channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
+func (m *MockTraffic) CountTraffic(oldTraffic map[channel.ID]traffic.Traffic, newTraffic traffic.Traffic, channelMap map[channel.ID]bool, channelID channel.ID) map[channel.ID]traffic.Traffic {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CountTraffic", oldTraffic, newTraffic, channelMap, channelID)
-	ret0, _ := ret[0].(map[channel.ChannelID]traffic.Traffic)
+	ret0, _ := ret[0].(map[channel.ID]traffic.Traffic)
 	return ret0
 }
 
@@ -172,10 +175,10 @@ func (mr *MockTrafficMockRecorder) CountTraffic(oldTraffic, newTraffic, channelM
 }
 
 // ParseFlow mocks base method.
-func (m *MockTraffic) ParseFlow(channelMap map[channel.ChannelID]bool, flow string) (map[session.IP]map[channel.ChannelID]traffic.Traffic, error) {
+func (m *MockTraffic) ParseFlow(channelMap map[channel.ID]bool, flow string) (map[session.IP]map[channel.ID]traffic.Traffic, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ParseFlow", channelMap, flow)
-	ret0, _ := ret[0].(map[session.IP]map[channel.ChannelID]traffic.Traffic)
+	ret0, _ := ret[0].(map[session.IP]map[channel.ID]traffic.Traffic)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -187,7 +190,7 @@ func (mr *MockTrafficMockRecorder) ParseFlow(channelMap, flow any) *gomock.Call 
 }
 
 // SiftTraffic mocks base method.
-func (m *MockTraffic) SiftTraffic(channelMap map[channel.ChannelID]bool, trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
+func (m *MockTraffic) SiftTraffic(channelMap map[channel.ID]bool, trafficMap map[session.IP]map[channel.ID]traffic.Traffic, sessionList []session.OnlineSession) ([]session.Chunk, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SiftTraffic", channelMap, trafficMap, sessionList)
 	ret0, _ := ret[0].([]session.Chunk)
@@ -205,6 +208,7 @@ func (mr *MockTrafficMockRecorder) SiftTraffic(channelMap, trafficMap, sessionLi
 type MockAggregator struct {
 	ctrl     *gomock.Controller
 	recorder *MockAggregatorMockRecorder
+	isgomock struct{}
 }
 
 // MockAggregatorMockRecorder is the mock recorder for MockAggregator.
@@ -225,13 +229,13 @@ func (m *MockAggregator) EXPECT() *MockAggregatorMockRecorder {
 }
 
 // Aggregate mocks base method.
-func (m *MockAggregator) Aggregate(wg *sync.WaitGroup, nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
+func (m *MockAggregator) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ID]bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Aggregate", wg, nasIP, sessionList, channelMap)
+	m.ctrl.Call(m, "Aggregate", nasIP, sessionList, channelMap)
 }
 
 // Aggregate indicates an expected call of Aggregate.
-func (mr *MockAggregatorMockRecorder) Aggregate(wg, nasIP, sessionList, channelMap any) *gomock.Call {
+func (mr *MockAggregatorMockRecorder) Aggregate(nasIP, sessionList, channelMap any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), wg, nasIP, sessionList, channelMap)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), nasIP, sessionList, channelMap)
 }

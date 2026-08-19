@@ -4,7 +4,6 @@ import (
 	"aggregator/src/config"
 	"aggregator/src/internal/repository"
 	"aggregator/src/internal/transaction"
-	"log"
 	"os"
 
 	"go.uber.org/mock/gomock"
@@ -22,7 +21,8 @@ func NewTestRepositoryImports(
 ) TestRepositoryImports {
 	config, err := config.NewConfig(os.Getenv("CONF_PATH"))
 	if err != nil {
-		log.Fatalln(err)
+		newFatalLogger().Error(err.Error())
+		os.Exit(1)
 	}
 
 	return TestRepositoryImports{

@@ -24,7 +24,7 @@ func NewFlowRepository(flowDirPath, disabledSubnetPath string) repository.Flow {
 func (r *flowRepository) ReadFlowDirNames() (dirNameList []string, err error) {
 	dirList, err := os.ReadDir(r.flowDirPath)
 	if err != nil {
-		return
+		return dirNameList, err
 	}
 
 	for _, dir := range dirList {
@@ -37,14 +37,14 @@ func (r *flowRepository) ReadFlowDirNames() (dirNameList []string, err error) {
 		err = global.ErrNoData
 	}
 
-	return
+	return dirNameList, err
 }
 
 // ReadDirFileNames считать имена файлов по пути
 func (r *flowRepository) ReadFileNamesInFlowDir(dirName string) (fileNameList []string, err error) {
 	dirList, err := os.ReadDir(fmt.Sprintf("%s/%s", r.flowDirPath, dirName))
 	if err != nil {
-		return
+		return fileNameList, err
 	}
 
 	for _, dir := range dirList {
@@ -57,13 +57,17 @@ func (r *flowRepository) ReadFileNamesInFlowDir(dirName string) (fileNameList []
 		err = global.ErrNoData
 	}
 
-	return
+	return fileNameList, err
 }
 
 // MoveFlowToTempDir переместить бинарник flow из надлежащей директории в директорию tmp
 func (r *flowRepository) MoveFlowToTempDir(dirName, fileName string) error {
 	// создание директории ./tmp
-	os.Mkdir(fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir), flow.AllRWX)
+	// вызывается на каждый файл в dirName, поэтому "уже существует" не ошибка
+	tmpDirPath := fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir)
+	if err := os.Mkdir(tmpDirPath, flow.AllRWX); err != nil && !os.IsExist(err) {
+		return err
+	}
 
 	return os.Rename(
 		// до nas_ip/ft-*
@@ -79,7 +83,7 @@ func (r *flowRepository) ReadFlow(dirName string) (output string, err error) {
 
 	dirList, err := os.ReadDir(path)
 	if err != nil {
-		return
+		return output, err
 	}
 
 	var (
@@ -91,25 +95,25 @@ func (r *flowRepository) ReadFlow(dirName string) (output string, err error) {
 		if !dir.IsDir() {
 			b, err = os.ReadFile(fmt.Sprintf("%s/%s", path, dir.Name()))
 			if err != nil {
-				return
+				return output, err
 			}
 			sumB = append(sumB, b...)
 		}
 	}
 
 	output = string(sumB)
-	return
+	return output, err
 }
 
 // RemoveOld удаляет старый flow
 func (r *flowRepository) RemoveOld(nasIP string) (err error) {
 	path := fmt.Sprintf("%s/%s/%s", r.flowDirPath, nasIP, flow.FlowTempDir)
 	if err = os.RemoveAll(path); err != nil {
-		return
+		return err
 	}
 	// создание директории ./tmp
 	if err = os.Mkdir(path, flow.AllRWX); err != nil {
-		return
+		return err
 	}
 
 	return os.WriteFile(fmt.Sprintf("%s/%s", path, flow.GitKeepName), []byte{}, flow.AllRWX)

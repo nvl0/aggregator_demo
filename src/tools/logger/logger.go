@@ -3,7 +3,7 @@ package logger
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"runtime"
@@ -14,6 +14,21 @@ import (
 
 var debugMode = os.Getenv("DEBUG") == "true"
 
+// newFatalLogger локальный логгер для ошибок инициализации до появления основного логгера приложения
+func newFatalLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, nil))
+}
+
+const (
+	// callerSkipFrames количество пропускаемых кадров стека до вызова логгера
+	callerSkipFrames = 8
+	// callerFrameCapacity размер буфера под кадры стека
+	callerFrameCapacity = 3
+
+	// logFilePerm права на файл-лог: чтение/запись только владельцу
+	logFilePerm = 0o600
+)
+
 type fileLogHook struct {
 	file   *os.File
 	level  string
@@ -21,15 +36,16 @@ type fileLogHook struct {
 }
 
 func (f *fileLogHook) Levels() []logrus.Level {
-	if f.level == "error" {
+	switch f.level {
+	case "error":
 		return []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel}
-	} else if f.level == "info" {
+	case "info":
 		if debugMode {
 			return []logrus.Level{logrus.InfoLevel, logrus.WarnLevel, logrus.DebugLevel}
 		}
 
 		return []logrus.Level{logrus.InfoLevel, logrus.WarnLevel}
-	} else {
+	default:
 		return logrus.AllLevels
 	}
 }
@@ -43,9 +59,9 @@ func (f *fileLogHook) SetErrorLevel() {
 }
 
 func (f *fileLogHook) Fire(e *logrus.Entry) error {
-	pc := make([]uintptr, 3)
-	cnt := runtime.Callers(8, pc)
-	for i := 0; i < cnt; i++ {
+	pc := make([]uintptr, callerFrameCapacity)
+	cnt := runtime.Callers(callerSkipFrames, pc)
+	for i := range cnt {
 		fu := runtime.FuncForPC(pc[i] - 1)
 		name := fu.Name()
 		if !strings.Contains(name, "github.com/sirupsen/logrus") {
@@ -84,11 +100,12 @@ func textFormatter() *logrus.TextFormatter {
 func openFile(fileName string) *fileLogHook {
 	hook := new(fileLogHook)
 	logDir := os.Getenv("LOG_DIR")
-	file, err := os.OpenFile(fmt.Sprintf("%s/%s", logDir, fileName), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s", logDir, fileName), os.O_CREATE|os.O_APPEND|os.O_WRONLY, logFilePerm)
 	if err == nil {
 		hook.file = file
 	} else {
-		log.Fatalln("Нет возможности писать в файл-логи. Убедитесь, что существует папка c правом доступа", logDir)
+		newFatalLogger().Error("Нет возможности писать в файл-логи. Убедитесь, что существует папка c правом доступа", "log_dir", logDir)
+		os.Exit(1)
 	}
 
 	return hook
@@ -118,7 +135,7 @@ func NewFileLogger(module string) *logrus.Logger {
 }
 
 // NewNoFileLogger файловый логгер
-func NewNoFileLogger(module string) *logrus.Logger {
+func NewNoFileLogger(_ string) *logrus.Logger {
 	newLogger := logrus.New()
 	newLogger.Formatter = textFormatter()
 

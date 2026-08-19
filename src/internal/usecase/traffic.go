@@ -16,6 +16,9 @@ import (
 	"github.com/yl2chen/cidranger"
 )
 
+// flowRowFieldCount количество полей в строке flow: #:doctets,srcaddr,dstaddr
+const flowRowFieldCount = 3
+
 type TrafficUsecase struct {
 	log *logrus.Logger
 	rimport.RepositoryImports
@@ -39,8 +42,8 @@ func NewTrafficUsecase(
 
 // ParseFlow парсинг flow
 // trafficMap map[user_ip]map[channel_id]Traffic
-func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowStr string) (
-	trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic, err error) {
+func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr string) (
+	trafficMap map[session.IP]map[channel.ID]traffic.Traffic, err error) {
 	var (
 		// обозначение принадлежности получателя/отправителя к сети
 		isSrcInternal, isDstInternal bool
@@ -56,7 +59,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 	// flowStr представляет собой таблицу
 	flowArr := strings.Split(flowStr, "\n")
 
-	trafficMap = make(map[session.IP]map[channel.ChannelID]traffic.Traffic, len(flowArr))
+	trafficMap = make(map[session.IP]map[channel.ID]traffic.Traffic, len(flowArr))
 
 	// парсинг flow
 	for _, row = range flowArr {
@@ -70,7 +73,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 		// ряд который содержит \t или \n не будет считан
 		if row != "" {
 			// определение аргументов в ряду
-			if rowArgs = strings.Split(row, ","); len(rowArgs) == 3 {
+			if rowArgs = strings.Split(row, ","); len(rowArgs) == flowRowFieldCount {
 				var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
 
 				lf := logrus.Fields{
@@ -139,23 +142,23 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ChannelID]bool, flowSt
 		err = global.ErrNoData
 	}
 
-	return
+	return trafficMap, err
 }
 
 // parseRecord парсинг одной записи flow
-func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIpRaw, dstIpRaw string) (r flow.Record, err error) {
+func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIPRaw, dstIPRaw string) (r flow.Record, err error) {
 	// парсинг получателя
-	if r.SrcIP = net.ParseIP(srcIpRaw); r.SrcIP == nil {
+	if r.SrcIP = net.ParseIP(srcIPRaw); r.SrcIP == nil {
 		r.Empty()
-		err = flow.ErrUndefinedIpFormat
-		return
+		err = flow.ErrUndefinedIPFormat
+		return r, err
 	}
 
 	// парсинг отправителя
-	if r.DstIP = net.ParseIP(dstIpRaw); r.DstIP == nil {
+	if r.DstIP = net.ParseIP(dstIPRaw); r.DstIP == nil {
 		r.Empty()
-		err = flow.ErrUndefinedIpFormat
-		return
+		err = flow.ErrUndefinedIPFormat
+		return r, err
 	}
 
 	// количество использованных байт
@@ -164,17 +167,15 @@ func (u *TrafficUsecase) parseRecord(byteSizeRaw, srcIpRaw, dstIpRaw string) (r 
 		err = flow.ErrTrafficByteParse
 	}
 
-	return
+	return r, err
 }
 
 // CountTraffic подсчет трафика по направлениям
-func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ChannelID]traffic.Traffic,
-	newTraffic traffic.Traffic, channelMap map[channel.ChannelID]bool,
-	channelID channel.ChannelID) map[channel.ChannelID]traffic.Traffic {
-
+func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ID]traffic.Traffic,
+	newTraffic traffic.Traffic, channelMap map[channel.ID]bool,
+	channelID channel.ID) map[channel.ID]traffic.Traffic {
 	// если старый трафик существует, то объединить
 	if len(oldTraffic) != 0 {
-
 		// если подсчет по каналу разрешен
 		if channelMap[channelID] {
 			newTraffic.Merge(oldTraffic[channelID])
@@ -182,26 +183,25 @@ func (u *TrafficUsecase) CountTraffic(oldTraffic map[channel.ChannelID]traffic.T
 		}
 
 		return oldTraffic
-
-	} else {
-		// если старого трафика не существует, то создать
-		// новый пустой трафик по всем направлениям
-		newChannelMap := u.createNewEmptyTrafficMap(channelMap)
-
-		// однако, записан будет только newTraffic по своему напрвлению
-		// если подсчет по каналу разрешен
-		if channelMap[channelID] {
-			newChannelMap[channelID] = newTraffic
-		}
-
-		return newChannelMap
 	}
+
+	// если старого трафика не существует, то создать
+	// новый пустой трафик по всем направлениям
+	newChannelMap := u.createNewEmptyTrafficMap(channelMap)
+
+	// однако, записан будет только newTraffic по своему напрвлению
+	// если подсчет по каналу разрешен
+	if channelMap[channelID] {
+		newChannelMap[channelID] = newTraffic
+	}
+
+	return newChannelMap
 }
 
 // createNewEmptyTrafficMap создание пустого трафика по всем доступным направлениям
-func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ChannelID]bool,
-) map[channel.ChannelID]traffic.Traffic {
-	trafficMap := make(map[channel.ChannelID]traffic.Traffic, len(channelMap))
+func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ID]bool,
+) map[channel.ID]traffic.Traffic {
+	trafficMap := make(map[channel.ID]traffic.Traffic, len(channelMap))
 
 	for channelID, enabled := range channelMap {
 		if enabled {
@@ -213,10 +213,9 @@ func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.Channel
 }
 
 // SiftTraffic просеивание трафика для получение чанков
-func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ChannelID]bool,
-	trafficMap map[session.IP]map[channel.ChannelID]traffic.Traffic,
+func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ID]bool,
+	trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
-
 	lf := logrus.Fields{
 		"nas_ip": sessionList[0].NasIP,
 	}
@@ -247,5 +246,5 @@ func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ChannelID]bool,
 		u.log.WithFields(lf).Errorln("не удалось просеять трафик, ошибка", err)
 	}
 
-	return
+	return chunkList, err
 }

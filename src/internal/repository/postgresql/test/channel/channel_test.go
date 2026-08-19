@@ -20,7 +20,7 @@ func TestLoadChannelList(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(conf)
 
-	db := pgdb.SqlxDB(conf.PostgresURL())
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	r.NoError(db.Ping())
 
 	repo := postgresql.NewChannelRepository()
@@ -35,16 +35,16 @@ func TestLoadChannelList(t *testing.T) {
 			Descr:   "repo_test",
 		}
 
-		expectedData.ID, err = gensql.GetNamedStruct[channel.ChannelID](postgresql.SqlxTx(ts), `
+		expectedData.ID, err = gensql.GetNamedStruct[channel.ID](postgresql.SqlxTx(ts), `
 			insert into channel (enabled, descr)
 			values (:enabled, :descr)
 			returning channel_id
 		`, expectedData)
 		r.NoError(err)
 
-		t.Run("проверка данных", func(t *testing.T) {
-			data, err := repo.LoadChannelList(ts)
-			r.NoError(err)
+		t.Run("проверка данных", func(_ *testing.T) {
+			data, errLoad := repo.LoadChannelList(ts)
+			r.NoError(errLoad)
 			r.Contains(data, expectedData)
 		})
 	})

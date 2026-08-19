@@ -90,9 +90,9 @@ func TestMoveFlowToTempDir(t *testing.T) {
 	t.Run("перемещение в ./tmp", func(t *testing.T) {
 		r.NoError(repo.MoveFlowToTempDir(dirName, fileName))
 
-		t.Run("проверка файла", func(t *testing.T) {
-			data, err := repo.ReadFileNamesInFlowDir(fmt.Sprintf("%s/%s", dirName, flow.FlowTempDir))
-			r.NoError(err)
+		t.Run("проверка файла", func(_ *testing.T) {
+			data, errRead := repo.ReadFileNamesInFlowDir(fmt.Sprintf("%s/%s", dirName, flow.FlowTempDir))
+			r.NoError(errRead)
 			r.Contains(data, fileName)
 		})
 	})
@@ -128,9 +128,9 @@ func TestReadFlow(t *testing.T) {
 
 	repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
 
-	t.Run("чтение flow", func(t *testing.T) {
-		data, err := repo.ReadFlow(dirName)
-		r.NoError(err)
+	t.Run("чтение flow", func(_ *testing.T) {
+		data, errRead := repo.ReadFlow(dirName)
+		r.NoError(errRead)
 		r.Equal(fileData, data)
 	})
 }

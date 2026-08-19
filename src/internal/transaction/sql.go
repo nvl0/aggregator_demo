@@ -17,11 +17,11 @@ func NewSQLSession(db *sqlx.DB) Session {
 func (t *sqlSession) Start() (err error) {
 	if t.init && t.currentTx != nil {
 		err = ErrActiveTransaction
-		return
+		return err
 	}
 	t.init = true
 	t.currentTx, err = t.db.Beginx()
-	return
+	return err
 }
 
 func (t *sqlSession) Rollback() (err error) {
@@ -36,7 +36,7 @@ func (t *sqlSession) Rollback() (err error) {
 		t.currentTx = nil
 	}
 
-	return
+	return err
 }
 
 func (t *sqlSession) Commit() (err error) {
@@ -49,7 +49,7 @@ func (t *sqlSession) Commit() (err error) {
 		err = t.currentTx.Commit()
 	}
 
-	return
+	return err
 }
 
 func (t *sqlSession) Tx() interface{} {

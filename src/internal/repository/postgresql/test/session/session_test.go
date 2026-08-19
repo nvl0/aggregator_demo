@@ -20,7 +20,7 @@ func TestLoadOnlineSessionList(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(conf)
 
-	db := pgdb.SqlxDB(conf.PostgresURL())
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	r.NoError(db.Ping())
 
 	repo := postgresql.NewSessionRepository()
@@ -42,9 +42,9 @@ func TestLoadOnlineSessionList(t *testing.T) {
 		`, expectedData)
 		r.NoError(err)
 
-		t.Run("проверка данных", func(t *testing.T) {
-			data, err := repo.LoadOnlineSessionList(ts)
-			r.NoError(err)
+		t.Run("проверка данных", func(_ *testing.T) {
+			data, errLoad := repo.LoadOnlineSessionList(ts)
+			r.NoError(errLoad)
 			r.Contains(data, expectedData)
 		})
 	})
@@ -57,7 +57,7 @@ func TestSaveChunkList(t *testing.T) {
 	r.NoError(err)
 	r.NotEmpty(conf)
 
-	db := pgdb.SqlxDB(conf.PostgresURL())
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
 	r.NoError(db.Ping())
 
 	repo := postgresql.NewSessionRepository()
@@ -78,14 +78,14 @@ func TestSaveChunkList(t *testing.T) {
 
 		r.NoError(repo.SaveChunkList(ts, expectedData))
 
-		t.Run("проверка данных", func(t *testing.T) {
-			data, err := gensql.Select[session.Chunk](postgresql.SqlxTx(ts), `
+		t.Run("проверка данных", func(_ *testing.T) {
+			data, errSelect := gensql.Select[session.Chunk](postgresql.SqlxTx(ts), `
 				select sess_id, channel_id, download, upload
 				from chunk
 				where sess_id = $1 and channel_id = $2
 			`, chunk.SessID, chunk.ChannelID)
-			r.NoError(err)
-			r.Equal(data, expectedData)
+			r.NoError(errSelect)
+			r.Equal(expectedData, data)
 		})
 	})
 }

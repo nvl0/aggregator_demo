@@ -3,6 +3,7 @@ package usecase
 import (
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
+	"errors"
 
 	"strings"
 
@@ -36,8 +37,8 @@ func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 	// получение списка имен файлов с директории
 	// чтобы перенести их в директорию ./tmp для считывания
 	fileNameListInDir, err := u.Repository.Flow.ReadFileNamesInFlowDir(dirName)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		// перед тем как перенести flow необходимо убедиться
 		// что flow файл имеет верный формат
 		for _, fileName := range fileNameListInDir {
@@ -45,7 +46,7 @@ func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 				// перенос flow файла в директорию ./tmp
 				if err = u.Repository.Flow.MoveFlowToTempDir(dirName, fileName); err != nil {
 					u.log.WithFields(lf).Errorln("не удалось переместить готовый flow в tmp, ошибка", err)
-					return
+					return flowStr, err
 				}
 			}
 		}
@@ -54,15 +55,15 @@ func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 		if flowStr, err = u.Repository.Flow.ReadFlow(dirName); err != nil {
 			u.log.WithFields(lf).Errorln("не удалось считать готовый flow с директории, ошибка", err)
 			err = global.ErrInternalError
-			return
+			return flowStr, err
 		}
 
-		return
-	case global.ErrNoData:
-		return
+		return flowStr, err
+	case errors.Is(err, global.ErrNoData):
+		return flowStr, err
 	default:
 		u.log.WithFields(lf).Errorln("не удалось просмотреть директорию, ошибка", err)
 		err = global.ErrInternalError
-		return
+		return flowStr, err
 	}
 }
