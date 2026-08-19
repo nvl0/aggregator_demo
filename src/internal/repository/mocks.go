@@ -22,6 +22,7 @@ import (
 type MockChannel struct {
 	ctrl     *gomock.Controller
 	recorder *MockChannelMockRecorder
+	isgomock struct{}
 }
 
 // MockChannelMockRecorder is the mock recorder for MockChannel.
@@ -60,6 +61,7 @@ func (mr *MockChannelMockRecorder) LoadChannelList(ts any) *gomock.Call {
 type MockSession struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionMockRecorder
+	isgomock struct{}
 }
 
 // MockSessionMockRecorder is the mock recorder for MockSession.
@@ -112,6 +114,7 @@ func (mr *MockSessionMockRecorder) SaveChunkList(ts, chunkList any) *gomock.Call
 type MockFlow struct {
 	ctrl     *gomock.Controller
 	recorder *MockFlowMockRecorder
+	isgomock struct{}
 }
 
 // MockFlowMockRecorder is the mock recorder for MockFlow.

@@ -19,6 +19,7 @@ import (
 type MockSession struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionMockRecorder
+	isgomock struct{}
 }
 
 // MockSessionMockRecorder is the mock recorder for MockSession.
@@ -112,6 +113,7 @@ func (mr *MockSessionMockRecorder) TxIsActive() *gomock.Call {
 type MockSessionManager struct {
 	ctrl     *gomock.Controller
 	recorder *MockSessionManagerMockRecorder
+	isgomock struct{}
 }
 
 // MockSessionManagerMockRecorder is the mock recorder for MockSessionManager.
