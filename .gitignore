@@ -6,3 +6,6 @@ app/flow/*
 !app/flow/.gitkeep
 docker/pg
 !docker/pg/.gitkeep
+docker/docker-compose.override.yaml
+docs/superpowers
+.superpowers

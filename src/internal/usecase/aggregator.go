@@ -49,7 +49,11 @@ var fgen = os.Getenv("FLOWGEN") == "true"
 func (u *AggregatorUsecase) Start(ctx context.Context) {
 	// генерация flow
 	if fgen {
-		if down, up, err := flowgen.Generate(); err == nil {
+		if down, up, err := flowgen.Generate(flowgen.Params{
+			NasIP:    flowgen.DefaultNasIP,
+			ClientIP: flowgen.DefaultClientIP,
+			FlowDir:  flowgen.DefaultFlowDir,
+		}); err == nil {
 			expectedChunk := session.Chunk{
 				SessID:    1,
 				ChannelID: int(channel.External),

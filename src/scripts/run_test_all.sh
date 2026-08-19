@@ -9,6 +9,7 @@ export SUBNET_DISABLED_DIR=../../../../subnet-disabled
 go clean -testcache
 echo '-- тест tools --'
 (cd ../tools/workerpool && go test -race -failfast .)
+(cd ../tools/flowgen && go test -failfast .)
 
 cd ../internal/
 echo '-- тест usecase --'
