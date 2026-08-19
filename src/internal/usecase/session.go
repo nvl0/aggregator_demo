@@ -5,6 +5,7 @@ import (
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
+	"errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -28,11 +29,10 @@ func NewSessionUsecase(
 // LoadOnlineSessionMap map[nas_ip][]session.OnlineSession
 func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
 	sessionMap map[session.NasIP][]session.OnlineSession, err error) {
-
 	// получение списка онлайн сессий
 	sessionList, err := u.Repository.Session.LoadOnlineSessionList(ts)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		sessionMap = make(map[session.NasIP][]session.OnlineSession)
 
 		// сортировка по nas_ip
@@ -40,12 +40,12 @@ func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
 			sessionMap[sess.NasIP] = append(sessionMap[sess.NasIP], sess)
 		}
 
-		return
-	case global.ErrNoData:
-		return
+		return sessionMap, err
+	case errors.Is(err, global.ErrNoData):
+		return sessionMap, err
 	default:
 		u.log.Errorln("не удалось загрузить список онлайн сессий, ошибка", err)
 		err = global.ErrInternalError
-		return
+		return sessionMap, err
 	}
 }

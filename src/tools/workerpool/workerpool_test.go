@@ -6,28 +6,78 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGoLimit количество одновременно работающих горутин не превышает размер пула
 func TestGoLimit(t *testing.T) {
-	assertMaxPeak := func(wantMax int32) func(t *testing.T, peak int32) {
-		return func(t *testing.T, peak int32) {
-			if peak > wantMax {
-				t.Fatalf("одновременно работало %d горутин, ожидалось не больше %d", peak, wantMax)
-			}
-		}
-	}
-
 	tests := []struct {
 		name       string
 		poolSize   int
 		taskCount  int
-		assertFunc func(t *testing.T, peak int32)
+		assertFunc func(t *testing.T, peak, poolSize int32)
 	}{
-		{name: "пул меньше числа задач", poolSize: 3, taskCount: 50, assertFunc: assertMaxPeak(3)},
-		{name: "пул больше числа задач", poolSize: 10, taskCount: 4, assertFunc: assertMaxPeak(4)},
-		{name: "нулевой размер приводится к единице", poolSize: 0, taskCount: 10, assertFunc: assertMaxPeak(1)},
-		{name: "отрицательный размер приводится к единице", poolSize: -5, taskCount: 10, assertFunc: assertMaxPeak(1)},
+		{
+			name:      "пул меньше числа задач",
+			poolSize:  3,
+			taskCount: 50,
+			assertFunc: func(t *testing.T, peak, poolSize int32) {
+				assert.LessOrEqual(
+					t,
+					peak,
+					poolSize,
+					"одновременно работало %d горутин, ожидалось не больше %d",
+					peak,
+					poolSize,
+				)
+			}},
+		{
+			name:      "пул больше числа задач",
+			poolSize:  10,
+			taskCount: 4,
+			assertFunc: func(t *testing.T, peak, poolSize int32) {
+				assert.LessOrEqual(
+					t,
+					peak,
+					poolSize,
+					"одновременно работало %d горутин, ожидалось не больше %d",
+					peak,
+					poolSize,
+				)
+			},
+		},
+		{
+			name:      "нулевой размер приводится к единице",
+			poolSize:  0,
+			taskCount: 10,
+			assertFunc: func(t *testing.T, peak, poolSize int32) {
+				assert.LessOrEqual(
+					t,
+					peak,
+					poolSize,
+					"одновременно работало %d горутин, ожидалось не больше %d",
+					peak,
+					poolSize,
+				)
+			},
+		},
+		{
+			name:      "отрицательный размер приводится к единице",
+			poolSize:  -5,
+			taskCount: 10,
+			assertFunc: func(t *testing.T, peak, poolSize int32) {
+				assert.LessOrEqual(
+					t,
+					peak,
+					poolSize,
+					"одновременно работало %d горутин, ожидалось не больше %d",
+					peak,
+					poolSize,
+				)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -36,7 +86,7 @@ func TestGoLimit(t *testing.T) {
 
 			p := workerpool.New(tt.poolSize)
 
-			for i := 0; i < tt.taskCount; i++ {
+			for range tt.taskCount {
 				if ok := p.Go(context.Background(), func() {
 					now := current.Add(1)
 
@@ -55,12 +105,10 @@ func TestGoLimit(t *testing.T) {
 			}
 
 			p.Wait()
+			require.Zero(t, current.Load(), "после Wait осталось %d незавершенных горутин", current.Load())
 
-			tt.assertFunc(t, peak.Load())
-
-			if got := current.Load(); got != 0 {
-				t.Fatalf("после Wait осталось %d незавершенных горутин", got)
-			}
+			wantMax := max(int32(tt.poolSize), 1)
+			tt.assertFunc(t, peak.Load(), wantMax)
 		})
 	}
 }
@@ -131,7 +179,7 @@ func TestWait(t *testing.T) {
 
 	p := workerpool.New(4)
 
-	for i := 0; i < taskCount; i++ {
+	for range taskCount {
 		if ok := p.Go(context.Background(), func() {
 			time.Sleep(5 * time.Millisecond)
 			done.Add(1)

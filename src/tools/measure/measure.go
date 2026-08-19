@@ -65,7 +65,7 @@ const maxResultCount = 5
 
 func (m *measure) Result() (total time.Duration) {
 	if !measureEnable {
-		return
+		return total
 	}
 	m.writer.Write("--------------------------------")
 	m.writer.Write("Результаты замеров:")
@@ -80,7 +80,6 @@ func (m *measure) Result() (total time.Duration) {
 
 			m.writer.Write(fmt.Sprintf("%s....%v", name, mData.Elapsed))
 			totalResults = append(totalResults, mData)
-
 		} else {
 			m.writer.Write(fmt.Sprintf("%s: %v", name, "таймер не завершен"))
 		}
@@ -107,7 +106,7 @@ func (m *measure) Result() (total time.Duration) {
 
 	m.reset()
 
-	return
+	return total
 }
 
 func (m *measure) reset() {

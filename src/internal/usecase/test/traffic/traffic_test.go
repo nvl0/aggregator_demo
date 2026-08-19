@@ -57,13 +57,14 @@ func TestParseFlow(t *testing.T) {
 			prepare: func(f *fields) {
 				channelMap := map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				}
 
 				gomock.InOrder(
 					// 1 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(132), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 132,
 							},
@@ -71,7 +72,7 @@ func TestParseFlow(t *testing.T) {
 					),
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(132), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Upload: 132,
 							},
@@ -81,7 +82,7 @@ func TestParseFlow(t *testing.T) {
 					// 2 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(456), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 456,
 							},
@@ -89,7 +90,7 @@ func TestParseFlow(t *testing.T) {
 					),
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(456), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Upload: 456,
 							},
@@ -99,7 +100,7 @@ func TestParseFlow(t *testing.T) {
 					// 3 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(234), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 366,
 								Upload:   132,
@@ -108,7 +109,7 @@ func TestParseFlow(t *testing.T) {
 					),
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(234), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 366,
 								Upload:   801,
@@ -119,7 +120,7 @@ func TestParseFlow(t *testing.T) {
 					// 4 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(345), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 801,
 								Upload:   366,
@@ -128,7 +129,7 @@ func TestParseFlow(t *testing.T) {
 					),
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(345), channelMap, channel.Internal).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.Internal: {
 								Download: 366,
 								Upload:   801,
@@ -140,6 +141,7 @@ func TestParseFlow(t *testing.T) {
 			args: args{
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 				flow: `132,127.0.0.1,127.0.0.2
 456,127.0.0.2,127.0.0.1
@@ -167,13 +169,14 @@ func TestParseFlow(t *testing.T) {
 			prepare: func(f *fields) {
 				channelMap := map[channel.ChannelID]bool{
 					channel.External: true,
+					channel.Internal: false,
 				}
 
 				gomock.InOrder(
 					// 1 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(534), channelMap, channel.External).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.External: {
 								Download: 534,
 							},
@@ -183,7 +186,7 @@ func TestParseFlow(t *testing.T) {
 					// 2 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(347), channelMap, channel.External).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.External: {
 								Upload: 347,
 							},
@@ -193,7 +196,7 @@ func TestParseFlow(t *testing.T) {
 					// 3 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficDownload(7856), channelMap, channel.External).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.External: {
 								Download: 8390,
 								Upload:   347,
@@ -204,7 +207,7 @@ func TestParseFlow(t *testing.T) {
 					// 4 цикл
 					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
 						traffic.NewTrafficUpload(221), channelMap, channel.External).Return(
-						map[channel.ChannelID]traffic.Traffic{
+						map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // содержит только включённый канал, как createNewEmptyTrafficMap
 							channel.External: {
 								Download: 8390,
 								Upload:   568,
@@ -216,6 +219,7 @@ func TestParseFlow(t *testing.T) {
 			args: args{
 				channelMap: map[channel.ChannelID]bool{
 					channel.External: true,
+					channel.Internal: false,
 				},
 				flow: `534,127.0.0.1,34.249.117.10
 347,34.249.117.10,127.0.0.1
@@ -439,8 +443,8 @@ func TestParseFlow(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
-			data, err := ui.Usecase.Traffic.ParseFlow(tt.args.channelMap, tt.args.flow)
-			r.Equal(tt.err, err)
+			data, errParse := ui.Usecase.Traffic.ParseFlow(tt.args.channelMap, tt.args.flow)
+			r.Equal(tt.err, errParse)
 			r.Equal(tt.data, data)
 		})
 	}
@@ -470,9 +474,9 @@ func TestCountTraffic(t *testing.T) {
 	}{
 		{
 			name:    "старый трафик существует",
-			prepare: func(f *fields) {},
+			prepare: func(_ *fields) {},
 			args: args{
-				oldTraffic: map[channel.ChannelID]traffic.Traffic{
+				oldTraffic: map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // только включённый канал уже отслеживается
 					channel.Internal: {
 						Download: 123,
 						Upload:   20,
@@ -484,11 +488,12 @@ func TestCountTraffic(t *testing.T) {
 				},
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 				channelID: channel.Internal,
 			},
 			err: nil,
-			data: map[channel.ChannelID]traffic.Traffic{
+			data: map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // только включённый канал уже отслеживается
 				channel.Internal: {
 					Download: 130,
 					Upload:   30,
@@ -497,7 +502,7 @@ func TestCountTraffic(t *testing.T) {
 		},
 		{
 			name: "старого трафика не существует",
-			prepare: func(f *fields) {
+			prepare: func(_ *fields) {
 			},
 			args: args{
 				oldTraffic: map[channel.ChannelID]traffic.Traffic{},
@@ -507,11 +512,12 @@ func TestCountTraffic(t *testing.T) {
 				},
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 				channelID: channel.Internal,
 			},
 			err: nil,
-			data: map[channel.ChannelID]traffic.Traffic{
+			data: map[channel.ChannelID]traffic.Traffic{ //nolint:exhaustive // только включённый канал уже отслеживается
 				channel.Internal: {
 					Download: 7,
 					Upload:   10,
@@ -571,10 +577,11 @@ func TestSiftTraffic(t *testing.T) {
 	}{
 		{
 			name:    "трафика нет",
-			prepare: func(f *fields) {},
+			prepare: func(_ *fields) {},
 			args: args{
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 				trafficMap: map[session.IP]map[channel.ChannelID]traffic.Traffic{},
 				sessionList: []session.OnlineSession{
@@ -597,10 +604,11 @@ func TestSiftTraffic(t *testing.T) {
 		},
 		{
 			name:    "трафик есть",
-			prepare: func(f *fields) {},
+			prepare: func(_ *fields) {},
 			args: args{
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 				trafficMap: map[session.IP]map[channel.ChannelID]traffic.Traffic{
 					ip1: {

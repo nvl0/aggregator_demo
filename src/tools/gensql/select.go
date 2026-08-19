@@ -3,6 +3,7 @@ package gensql
 import (
 	"aggregator/src/internal/entity/global"
 	"database/sql"
+	"errors"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -16,10 +17,10 @@ func Select[T any](tx *sqlx.Tx, sqlQuery string, params ...interface{}) ([]T, er
 		err = sql.ErrNoRows
 	}
 
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, nil
-	case sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		return nil, global.ErrNoData
 	default:
 		return nil, err
@@ -36,18 +37,15 @@ func SelectNamed[T any](tx *sqlx.Tx, sqlQuery string, params map[string]interfac
 	defer stmt.Close()
 
 	err = stmt.Select(&data, params)
-	if err != nil {
-		return nil, err
-	}
 
 	if err == nil && len(data) == 0 {
 		err = sql.ErrNoRows
 	}
 
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		return data, nil
-	case sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		return nil, global.ErrNoData
 	default:
 		return nil, err

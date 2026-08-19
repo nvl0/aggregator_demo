@@ -5,9 +5,14 @@ import (
 	"aggregator/src/internal/repository/postgresql"
 	"aggregator/src/internal/repository/storage"
 	"aggregator/src/internal/transaction"
-	"log"
+	"log/slog"
 	"os"
 )
+
+// newFatalLogger локальный логгер для ошибок инициализации до появления основного логгера приложения
+func newFatalLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, nil))
+}
 
 type RepositoryImports struct {
 	Config         config.Config
@@ -20,7 +25,8 @@ func NewRepositoryImports(
 ) RepositoryImports {
 	conf, err := config.NewConfig(os.Getenv("CONF_PATH"))
 	if err != nil {
-		log.Fatalln(err)
+		newFatalLogger().Error(err.Error())
+		os.Exit(1)
 	}
 
 	return RepositoryImports{

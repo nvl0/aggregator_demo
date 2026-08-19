@@ -77,7 +77,7 @@ func TestGenerate(t *testing.T) {
 func TestGenerateNoPanic(t *testing.T) {
 	flowDir := t.TempDir()
 
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		if _, _, err := flowgen.Generate(flowgen.Params{
 			NasIP:    "10.0.0.0",
 			ClientIP: "127.0.1.1",

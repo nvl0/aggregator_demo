@@ -13,7 +13,7 @@ func CreateDisabledSubnetRange(path string) (ranger cidranger.Ranger, err error)
 
 	// считывание файла
 	if b, err = os.ReadFile(path); err != nil {
-		return
+		return ranger, err
 	}
 
 	output := string(b)
@@ -23,23 +23,22 @@ func CreateDisabledSubnetRange(path string) (ranger cidranger.Ranger, err error)
 	var network *net.IPNet
 
 	// разделение файла подсетей построчно
-	for _, item := range strings.Split(string(output), "\n") {
+	for _, item := range strings.Split(output, "\n") {
 		item = strings.TrimSpace(item)
 
 		// определение конца строки
 		if len(item) > 0 {
-
 			// парсинг подсети
 			if _, network, err = net.ParseCIDR(item); err != nil {
-				return
+				return ranger, err
 			}
 
 			// добавление подсети в блок
 			if err = ranger.Insert(cidranger.NewBasicRangerEntry(*network)); err != nil {
-				return
+				return ranger, err
 			}
 		}
 	}
 
-	return
+	return ranger, err
 }

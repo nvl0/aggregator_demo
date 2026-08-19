@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const nullJSONValue = "null"
+
 // NullTime дата-время которое может быть null
 type NullTime struct {
 	Time  time.Time
@@ -22,7 +24,9 @@ func (nt *NullTime) Scan(value interface{}) error {
 }
 
 // Value implements the driver Valuer interface.
-func (nt NullTime) Value() (driver.Value, error) {
+//
+//nolint:nilnil // nil,nil обозначает SQL NULL — контракт driver.Valuer, а не ошибка
+func (nt *NullTime) Value() (driver.Value, error) {
 	if !nt.Valid {
 		return nil, nil
 	}
@@ -30,7 +34,7 @@ func (nt NullTime) Value() (driver.Value, error) {
 }
 
 // Format implements the driver Formatr interface.
-func (nt NullTime) Format(layout string) string {
+func (nt *NullTime) Format(layout string) string {
 	if !nt.Valid {
 		return "-"
 	}
@@ -46,11 +50,13 @@ func (ni *NullInt64) Scan(value interface{}) error {
 
 	if err := i.Scan(value); err != nil {
 		var f sql.NullFloat64
-		if err := f.Scan(value); err != nil {
-			return err
+		if errFloat := f.Scan(value); errFloat != nil {
+			return errFloat
 		}
 
-		i.Scan(int64(f.Float64))
+		if errFallback := i.Scan(int64(f.Float64)); errFallback != nil {
+			return errFallback
+		}
 	}
 
 	// if nil then make Valid false
@@ -71,31 +77,39 @@ func (ni *NullInt64) GetInt() int {
 }
 
 // Value implements the driver Valuer interface.
-func (n NullInt64) Value() (driver.Value, error) {
-	if !n.Valid {
+//
+//nolint:nilnil // nil,nil обозначает SQL NULL — контракт driver.Valuer, а не ошибка
+func (ni *NullInt64) Value() (driver.Value, error) {
+	if !ni.Valid {
 		return nil, nil
 	}
-	return n.Int64, nil
+	return ni.Int64, nil
 }
 
 // Value implements the driver Valuer interface.
-func (n NullFloat64) Value() (driver.Value, error) {
-	if !n.Valid {
+//
+//nolint:nilnil // nil,nil обозначает SQL NULL — контракт driver.Valuer, а не ошибка
+func (nf *NullFloat64) Value() (driver.Value, error) {
+	if !nf.Valid {
 		return nil, nil
 	}
-	return n.Float64, nil
+	return nf.Float64, nil
 }
 
 // Value implements the driver Valuer interface.
-func (n NullBool) Value() (driver.Value, error) {
-	if !n.Valid {
+//
+//nolint:nilnil // nil,nil обозначает SQL NULL — контракт driver.Valuer, а не ошибка
+func (nb *NullBool) Value() (driver.Value, error) {
+	if !nb.Valid {
 		return nil, nil
 	}
-	return n.Bool, nil
+	return nb.Bool, nil
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullString) Value() (driver.Value, error) {
+//
+//nolint:nilnil // nil,nil обозначает SQL NULL — контракт driver.Valuer, а не ошибка
+func (ns *NullString) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
@@ -174,16 +188,16 @@ func (ns *NullString) OptionalResult() string {
 // NullTime is an alias for mysql.NullTime data type
 
 // MarshalJSON for NullInt64
-func (ni NullInt64) MarshalJSON() ([]byte, error) {
+func (ni *NullInt64) MarshalJSON() ([]byte, error) {
 	if !ni.Valid {
-		return []byte("null"), nil
+		return []byte(nullJSONValue), nil
 	}
 	return json.Marshal(ni.Int64)
 }
 
 // UnmarshalJSON for NullInt64
 func (ni *NullInt64) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
+	if string(b) == nullJSONValue {
 		return nil
 	}
 	err := json.Unmarshal(b, &ni.Int64)
@@ -192,16 +206,16 @@ func (ni *NullInt64) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalJSON for NullBool
-func (nb NullBool) MarshalJSON() ([]byte, error) {
+func (nb *NullBool) MarshalJSON() ([]byte, error) {
 	if !nb.Valid {
-		return []byte("null"), nil
+		return []byte(nullJSONValue), nil
 	}
 	return json.Marshal(nb.Bool)
 }
 
 // UnmarshalJSON for NullBool
 func (nb *NullBool) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
+	if string(b) == nullJSONValue {
 		return nil
 	}
 	err := json.Unmarshal(b, &nb.Bool)
@@ -210,16 +224,16 @@ func (nb *NullBool) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalJSON for NullFloat64
-func (nf NullFloat64) MarshalJSON() ([]byte, error) {
+func (nf *NullFloat64) MarshalJSON() ([]byte, error) {
 	if !nf.Valid {
-		return []byte("null"), nil
+		return []byte(nullJSONValue), nil
 	}
 	return json.Marshal(nf.Float64)
 }
 
 // UnmarshalJSON for NullFloat64
 func (nf *NullFloat64) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
+	if string(b) == nullJSONValue {
 		return nil
 	}
 	err := json.Unmarshal(b, &nf.Float64)
@@ -228,16 +242,16 @@ func (nf *NullFloat64) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalJSON for NullString
-func (ns NullString) MarshalJSON() ([]byte, error) {
+func (ns *NullString) MarshalJSON() ([]byte, error) {
 	if !ns.Valid {
-		return []byte("null"), nil
+		return []byte(nullJSONValue), nil
 	}
 	return json.Marshal(ns.String)
 }
 
 // UnmarshalJSON for NullString
 func (ns *NullString) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
+	if string(b) == nullJSONValue {
 		return nil
 	}
 	err := json.Unmarshal(b, &ns.String)
@@ -246,18 +260,18 @@ func (ns *NullString) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalJSON try to marshalize to json
-func (nt NullTime) MarshalJSON() ([]byte, error) {
+func (nt *NullTime) MarshalJSON() ([]byte, error) {
 	if nt.Valid {
 		return nt.Time.MarshalJSON()
 	}
 
-	return []byte("null"), nil
+	return []byte(nullJSONValue), nil
 }
 
 // UnmarshalJSON try to unmarshal data from input
 func (nt *NullTime) UnmarshalJSON(b []byte) error {
 	text := strings.ToLower(string(b))
-	if text == "null" {
+	if text == nullJSONValue {
 		nt.Valid = false
 		nt.Time = time.Time{}
 		return nil
@@ -275,7 +289,7 @@ func (nt *NullTime) UnmarshalJSON(b []byte) error {
 // NewInt64 конструктор Int64
 func NewInt64(i int) NullInt64 {
 	d := NullInt64{}
-	d.Scan(i)
+	_ = d.Scan(i)
 
 	return d
 }
@@ -283,7 +297,7 @@ func NewInt64(i int) NullInt64 {
 // NewString конструктор String
 func NewString(s string) NullString {
 	d := NullString{}
-	d.Scan(s)
+	_ = d.Scan(s)
 
 	return d
 }
@@ -291,7 +305,7 @@ func NewString(s string) NullString {
 // NewNullTime конструктор NullTime
 func NewNullTime(d time.Time) NullTime {
 	nt := NullTime{}
-	nt.Scan(d)
+	_ = nt.Scan(d)
 
 	return nt
 }
@@ -299,7 +313,7 @@ func NewNullTime(d time.Time) NullTime {
 // NewFloat64 конструктор Float64
 func NewFloat64(f float64) NullFloat64 {
 	d := NullFloat64{}
-	d.Scan(f)
+	_ = d.Scan(f)
 
 	return d
 }

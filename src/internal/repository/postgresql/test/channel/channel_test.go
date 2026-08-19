@@ -42,9 +42,9 @@ func TestLoadChannelList(t *testing.T) {
 		`, expectedData)
 		r.NoError(err)
 
-		t.Run("проверка данных", func(t *testing.T) {
-			data, err := repo.LoadChannelList(ts)
-			r.NoError(err)
+		t.Run("проверка данных", func(_ *testing.T) {
+			data, errLoad := repo.LoadChannelList(ts)
+			r.NoError(errLoad)
 			r.Contains(data, expectedData)
 		})
 	})

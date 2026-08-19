@@ -25,6 +25,10 @@ const (
 	recordCount = 100
 	// maxByteSize верхняя граница размера переданных байт в одной записи
 	maxByteSize = 10000
+	// flowBytesCapacity ожидаемый размер flow файла: 26 (заголовок) + 31 (max запись) * recordCount
+	flowBytesCapacity = 357
+	// ipv4ByteLen длина ipv4 адреса в байтах
+	ipv4ByteLen = 4
 )
 
 // Params параметры генерации flow
@@ -46,18 +50,18 @@ type Params struct {
 func Generate(p Params) (download, upload int, err error) {
 	dirPath := fmt.Sprintf("%s/%s", p.FlowDir, p.NasIP)
 	if err = os.MkdirAll(dirPath, dirPerm); err != nil {
-		return
+		return download, upload, err
 	}
 
-	flowBytes := make([]byte, 0, 357)
+	flowBytes := make([]byte, 0, flowBytesCapacity)
 	flowBytes = append(flowBytes, []byte("#:doctets,srcaddr,dstaddr\n")...)
-	ipBuf := make([]byte, 4)
+	ipBuf := make([]byte, ipv4ByteLen)
 
-	for i := 0; i < recordCount; i++ {
-		binary.LittleEndian.PutUint32(ipBuf, rand.Uint32())
+	for i := range recordCount {
+		binary.LittleEndian.PutUint32(ipBuf, rand.Uint32()) //nolint:gosec // dev-нагрузка, не крипто
 
 		// +1 чтобы исключить панику rand.IntN(0)
-		bytesTransfered := rand.IntN(maxByteSize) + 1
+		bytesTransfered := rand.IntN(maxByteSize) + 1 //nolint:gosec // dev-нагрузка, не крипто
 
 		if i%2 == 0 {
 			download += bytesTransfered
@@ -74,8 +78,8 @@ func Generate(p Params) (download, upload int, err error) {
 
 	fileName := fmt.Sprintf("ft-%s", time.Now().Format("02.01.2006-15:04:05"))
 	if err = os.WriteFile(fmt.Sprintf("%s/%s", dirPath, fileName), flowBytes, filePerm); err != nil {
-		return
+		return download, upload, err
 	}
 
-	return
+	return download, upload, err
 }

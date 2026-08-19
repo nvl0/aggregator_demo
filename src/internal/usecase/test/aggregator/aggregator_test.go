@@ -48,6 +48,7 @@ func TestStart(t *testing.T) {
 			prepare: func(f *fields) {
 				channelMap := map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				}
 				sessionMap := map[session.NasIP][]session.OnlineSession{
 					nasIP: {
@@ -82,6 +83,7 @@ func TestStart(t *testing.T) {
 			prepare: func(f *fields) {
 				channelMap := map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				}
 				sessionMap := map[session.NasIP][]session.OnlineSession{
 					nasIP: {
@@ -168,6 +170,7 @@ func TestAggregate(t *testing.T) {
 
 				channelMap := map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				}
 				trafficMap := map[session.IP]map[channel.ChannelID]traffic.Traffic{
 					ip1: {
@@ -200,7 +203,9 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.bi.TestBridge.Flow.EXPECT().PrepareFlow(nasIP).Return(flowStr, nil),
 					f.bi.TestBridge.Traffic.EXPECT().ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).
+						Return(chunkList, nil),
 					f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts),
 					f.ts.EXPECT().Start().Return(nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
@@ -220,6 +225,7 @@ func TestAggregate(t *testing.T) {
 				},
 				channelMap: map[channel.ChannelID]bool{
 					channel.Internal: true,
+					channel.External: false,
 				},
 			},
 		},

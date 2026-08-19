@@ -32,9 +32,9 @@ func NewConfig(confPath string) (Config, error) {
 
 // PostgresURL адрес постгреса
 func (c *Config) PostgresURL() string {
-	pgUrl := os.Getenv("PG_URL")
-	if pgUrl != "" {
-		c.Postgres.URL = pgUrl
+	pgURL := os.Getenv("PG_URL")
+	if pgURL != "" {
+		c.Postgres.URL = pgURL
 	}
 	return fmt.Sprintf("postgresql://%s:%s@%s/aggregator?sslmode=disable&timezone=Asia/Tashkent",
 		c.Postgres.User, c.Postgres.Password, c.Postgres.URL)

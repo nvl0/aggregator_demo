@@ -19,6 +19,9 @@ var (
 	module  = "aggregator"
 )
 
+// dbConnReserve резерв соединений с бд под параллельные стартовые запросы
+const dbConnReserve = 2
+
 func main() {
 	log := logger.NewFileLogger(module)
 	log.Debugln("version", version)
@@ -28,8 +31,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
-	if err := pgDB.Ping(); err != nil {
+	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+dbConnReserve)
+	if err = pgDB.Ping(); err != nil {
 		log.Fatalln(err)
 	}
 

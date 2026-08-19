@@ -98,7 +98,6 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	// название директории совпадает с session.NasIP
 	for _, nasIP := range dirList {
-
 		// если директория не совпадет с session.NasIP
 		// то обработка директории будет отброшена
 		sessionList, exists := sessionMap[nasIP]
@@ -108,7 +107,6 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		}
 
 		// копия nasIP для явности; sessionList копировать не нужно, она объявлена внутри тела цикла
-		nasIP := nasIP
 
 		// если контекст отменился во время ожидания свободного слота,
 		// рассылка оставшихся nas_ip прекращается
@@ -133,7 +131,7 @@ func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ChannelID
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
-	defer ts.Rollback()
+	defer func() { _ = ts.Rollback() }()
 
 	chanLogName := "получение мапки каналов"
 	u.measure.Start(chanLogName)
@@ -157,7 +155,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
-	defer ts.Rollback()
+	defer func() { _ = ts.Rollback() }()
 
 	sessLogName := "получение мапки онлайн сессий"
 	u.measure.Start(sessLogName)
@@ -173,7 +171,11 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 }
 
 // Aggregate агрегация траффика
-func (u *AggregatorUsecase) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ChannelID]bool) {
+func (u *AggregatorUsecase) Aggregate(
+	nasIP string,
+	sessionList []session.OnlineSession,
+	channelMap map[channel.ChannelID]bool,
+) {
 	writer := measure.NewLogrusWriter(u.log)
 	m := measure.NewMeasure(writer)
 
@@ -184,7 +186,7 @@ func (u *AggregatorUsecase) Aggregate(nasIP string, sessionList []session.Online
 	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	flow, err := u.Bridge.Flow.PrepareFlow(string(nasIP))
+	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
 	if err != nil {
 		return
 	}
@@ -215,7 +217,7 @@ func (u *AggregatorUsecase) Aggregate(nasIP string, sessionList []session.Online
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
-	defer ts.Rollback()
+	defer func() { _ = ts.Rollback() }()
 
 	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP)
 	m.Start(saveChunkListLogName)
@@ -232,7 +234,6 @@ func (u *AggregatorUsecase) Aggregate(nasIP string, sessionList []session.Online
 
 	if err = u.Repository.Flow.RemoveOld(nasIP); err != nil {
 		u.log.WithFields(lf).Errorln("не удалось удалить старый flow, ошибка", err)
-		err = nil
 	}
 
 	m.Result()

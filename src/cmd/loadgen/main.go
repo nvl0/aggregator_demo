@@ -14,8 +14,10 @@ import (
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -35,75 +37,85 @@ const (
 	// maxSynthetic предел синтетических сессий,
 	// ограничен подсетью internal 127.0.0.1/20 из subnet-disabled
 	maxSynthetic = 15 * clientIPPerOctet
+	// nasOctetSize размер одного октета ip-адреса
+	nasOctetSize = 256
+	// dbConnReserve резерв соединений с бд под параллельные стартовые запросы
+	dbConnReserve = 2
 )
 
 func main() {
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(log); err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+}
+
+func run(log *slog.Logger) error {
 	var (
-		n        = flag.Int("n", 0, "количество синтетических nas_ip директорий и online сессий")
-		cleanup  = flag.Bool("cleanup", false, "удалить синтетические директории и строки бд")
-		run      = flag.Bool("run", false, "выполнить один цикл агрегации и замерить время")
-		poolSize = flag.Int("pool-size", 0, "размер пула воркеров, 0 берет значение из conf.yaml")
+		n         = flag.Int("n", 0, "количество синтетических nas_ip директорий и online сессий")
+		cleanup   = flag.Bool("cleanup", false, "удалить синтетические директории и строки бд")
+		runCycleF = flag.Bool("run", false, "выполнить один цикл агрегации и замерить время")
+		poolSize  = flag.Int("pool-size", 0, "размер пула воркеров, 0 берет значение из conf.yaml")
 	)
 	flag.Parse()
 
 	flowDir := os.Getenv("FLOW_DIR")
 	if flowDir == "" {
-		fmt.Println("не задана переменная окружения FLOW_DIR")
-		os.Exit(1)
+		return errors.New("не задана переменная окружения FLOW_DIR")
 	}
 
 	// AggregatorUsecase читает размер пула из конфига при создании,
 	// env переопределяет значение conf.yaml
 	if *poolSize > 0 {
 		if err := os.Setenv("WORKER_POOL_SIZE", strconv.Itoa(*poolSize)); err != nil {
-			fmt.Println("не удалось задать WORKER_POOL_SIZE, ошибка", err)
-			os.Exit(1)
+			return fmt.Errorf("не удалось задать WORKER_POOL_SIZE: %w", err)
 		}
 	}
 
-	conf, err := config.NewConfig(os.Getenv("CONF_PATH"))
-	if err != nil {
-		fmt.Println("не удалось загрузить конфиг, ошибка", err)
-		os.Exit(1)
+	var (
+		conf config.Config
+		err  error
+	)
+	if conf, err = config.NewConfig(os.Getenv("CONF_PATH")); err != nil {
+		return fmt.Errorf("не удалось загрузить конфиг: %w", err)
 	}
 
-	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
+	db := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+dbConnReserve)
 	defer db.Close()
 
 	if *cleanup {
 		if err = cleanupLoad(db, flowDir); err != nil {
-			fmt.Println("не удалось очистить синтетическую нагрузку, ошибка", err)
-			os.Exit(1)
+			return fmt.Errorf("не удалось очистить синтетическую нагрузку: %w", err)
 		}
-		fmt.Println("синтетическая нагрузка удалена")
+		log.Info("синтетическая нагрузка удалена")
 	}
 
 	if *n > 0 {
 		if *n > maxSynthetic {
-			fmt.Printf("максимум %d сессий, подсеть internal исчерпана\n", maxSynthetic)
-			os.Exit(1)
+			return fmt.Errorf("максимум %d сессий, подсеть internal исчерпана", maxSynthetic)
 		}
 
 		if err = seedLoad(db, flowDir, *n); err != nil {
-			fmt.Println("не удалось создать синтетическую нагрузку, ошибка", err)
-			os.Exit(1)
+			return fmt.Errorf("не удалось создать синтетическую нагрузку: %w", err)
 		}
-		fmt.Printf("создано %d nas_ip директорий и online сессий\n", *n)
+		log.Info("синтетическая нагрузка создана", "n", *n)
 	}
 
-	if *run {
-		elapsed, err := runCycle(conf)
-		if err != nil {
-			fmt.Println("не удалось выполнить цикл агрегации, ошибка", err)
-			os.Exit(1)
+	if *runCycleF {
+		var elapsed time.Duration
+		if elapsed, err = runCycle(conf); err != nil {
+			return fmt.Errorf("не удалось выполнить цикл агрегации: %w", err)
 		}
-		fmt.Printf("n=%d pool=%d время цикла %s\n", *n, conf.WorkerPoolSize(), elapsed)
+		log.Info("цикл агрегации завершен", "n", *n, "pool", conf.WorkerPoolSize(), "elapsed", elapsed.String())
 	}
+
+	return nil
 }
 
 // nasIPByIndex имя синтетической nas_ip директории
 func nasIPByIndex(i int) string {
-	return fmt.Sprintf("%s%d.%d.0", syntheticNasPrefix, i/256, i%256)
+	return fmt.Sprintf("%s%d.%d.0", syntheticNasPrefix, i/nasOctetSize, i%nasOctetSize)
 }
 
 // clientIPByIndex ip клиента внутри подсети internal 127.0.0.1/20.
@@ -115,21 +127,21 @@ func clientIPByIndex(i int) string {
 
 // seedLoad создает flow директории с файлами и синтетические online сессии
 func seedLoad(db *sqlx.DB, flowDir string, n int) (err error) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if _, _, err = flowgen.Generate(flowgen.Params{
 			NasIP:    nasIPByIndex(i),
 			ClientIP: clientIPByIndex(i),
 			FlowDir:  flowDir,
 		}); err != nil {
-			return
+			return err
 		}
 	}
 
 	tx, err := db.Beginx()
 	if err != nil {
-		return
+		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.Preparex(`
 		insert into online_session (ip, sess_id, nas_ip)
@@ -137,13 +149,13 @@ func seedLoad(db *sqlx.DB, flowDir string, n int) (err error) {
 		on conflict (ip) do update
 		set sess_id = excluded.sess_id, nas_ip = excluded.nas_ip`)
 	if err != nil {
-		return
+		return err
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if _, err = stmt.Exec(clientIPByIndex(i), syntheticSessIDBase+i, nasIPByIndex(i)); err != nil {
-			return
+			return err
 		}
 	}
 
@@ -154,24 +166,24 @@ func seedLoad(db *sqlx.DB, flowDir string, n int) (err error) {
 func cleanupLoad(db *sqlx.DB, flowDir string) (err error) {
 	dirList, err := os.ReadDir(flowDir)
 	if err != nil {
-		return
+		return err
 	}
 
 	for _, dir := range dirList {
 		if dir.IsDir() && strings.HasPrefix(dir.Name(), syntheticNasPrefix) {
 			if err = os.RemoveAll(fmt.Sprintf("%s/%s", flowDir, dir.Name())); err != nil {
-				return
+				return err
 			}
 		}
 	}
 
 	if _, err = db.Exec(`delete from chunk where sess_id >= $1`, syntheticSessIDBase); err != nil {
-		return
+		return err
 	}
 
 	_, err = db.Exec(`delete from online_session where sess_id >= $1`, syntheticSessIDBase)
 
-	return
+	return err
 }
 
 // runCycle собирает зависимости как в src/cmd/main.go
@@ -179,11 +191,11 @@ func cleanupLoad(db *sqlx.DB, flowDir string) (err error) {
 func runCycle(conf config.Config) (elapsed time.Duration, err error) {
 	log := logger.NewNoFileLogger("loadgen")
 
-	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+2)
+	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+dbConnReserve)
 	defer pgDB.Close()
 
 	if err = pgDB.Ping(); err != nil {
-		return
+		return elapsed, err
 	}
 
 	ri := rimport.NewRepositoryImports(transaction.NewSQLSessionManager(pgDB))
@@ -202,5 +214,5 @@ func runCycle(conf config.Config) (elapsed time.Duration, err error) {
 	ui.Usecase.Aggregator.Start(context.Background())
 	elapsed = time.Since(start)
 
-	return
+	return elapsed, err
 }
