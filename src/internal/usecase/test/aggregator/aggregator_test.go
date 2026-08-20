@@ -111,6 +111,43 @@ func TestStart(t *testing.T) {
 				ctx: canceledCtx,
 			},
 		},
+		{
+			name: "паника воркера не роняет рассылку",
+			prepare: func(f *fields) {
+				channelMap := map[channel.ID]bool{
+					channel.Internal: true,
+					channel.External: false,
+				}
+				sessionMap := map[session.NasIP][]session.OnlineSession{
+					nasIP: {
+						{
+							SessID: sessID,
+							NasIP:  nasIP,
+							IP:     ip1,
+						},
+					},
+				}
+				dirList := []string{nasIP}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(f.ts).Return(channelMap, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
+
+				// если пул не перехватит панику, упадет весь тестовый процесс
+				f.bi.TestBridge.Aggregator.EXPECT().
+					Aggregate(nasIP, sessionMap[nasIP], channelMap).
+					Do(func(_ string, _ []session.OnlineSession, _ map[channel.ID]bool) {
+						panic("паника тестового воркера")
+					})
+			},
+			args: args{
+				ctx: context.Background(),
+			},
+		},
 	}
 
 	for _, tt := range tests {

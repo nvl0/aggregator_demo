@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/sirupsen/logrus"
 )
@@ -94,7 +95,12 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	u.measure.Result()
 
-	pool := workerpool.New(u.poolSize)
+	pool := workerpool.New(u.poolSize, workerpool.WithOnPanic(func(recovered any) {
+		u.log.WithFields(logrus.Fields{
+			"recovered": recovered,
+			"stack":     string(debug.Stack()),
+		}).Errorln("паника воркера агрегации, обработка nas_ip прервана")
+	}))
 
 	// название директории совпадает с session.NasIP
 	for _, nasIP := range dirList {
