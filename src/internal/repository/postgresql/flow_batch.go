@@ -66,7 +66,7 @@ func (r *flowBatchRepository) SaveFileNames(
 	`); err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, fileName := range fileNameList {
 		if _, err = stmt.Exec(nasIP, fileName); err != nil {

@@ -210,6 +210,7 @@ func (u *AggregatorUsecase) Aggregate(
 	if !hasNewFile(fileNameList, committedFileNames) {
 		u.log.WithFields(lf).Debugln("новых flow файлов нет, повторная очистка tmp")
 		u.removeOldFlow(nasIP)
+		m.Result()
 
 		return
 	}
@@ -233,7 +234,7 @@ func (u *AggregatorUsecase) Aggregate(
 	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
 	u.log.Debugln("актуальный результат", dump.Struct(chunkList))
 
-	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP)
+	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков и чекпоинта в бд", nasIP)
 	m.Start(saveChunkListLogName)
 	if err = u.saveChunkListWithCheckpoint(nasIP, chunkList, fileNameList); err != nil {
 		return
