@@ -110,6 +110,73 @@ func (mr *MockSessionMockRecorder) SaveChunkList(ts, chunkList any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChunkList", reflect.TypeOf((*MockSession)(nil).SaveChunkList), ts, chunkList)
 }
 
+// MockFlowBatch is a mock of FlowBatch interface.
+type MockFlowBatch struct {
+	ctrl     *gomock.Controller
+	recorder *MockFlowBatchMockRecorder
+	isgomock struct{}
+}
+
+// MockFlowBatchMockRecorder is the mock recorder for MockFlowBatch.
+type MockFlowBatchMockRecorder struct {
+	mock *MockFlowBatch
+}
+
+// NewMockFlowBatch creates a new mock instance.
+func NewMockFlowBatch(ctrl *gomock.Controller) *MockFlowBatch {
+	mock := &MockFlowBatch{ctrl: ctrl}
+	mock.recorder = &MockFlowBatchMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockFlowBatch) EXPECT() *MockFlowBatchMockRecorder {
+	return m.recorder
+}
+
+// LoadCommittedFileNames mocks base method.
+func (m *MockFlowBatch) LoadCommittedFileNames(ts transaction.Session, nasIP string) (map[string]bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadCommittedFileNames", ts, nasIP)
+	ret0, _ := ret[0].(map[string]bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadCommittedFileNames indicates an expected call of LoadCommittedFileNames.
+func (mr *MockFlowBatchMockRecorder) LoadCommittedFileNames(ts, nasIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadCommittedFileNames", reflect.TypeOf((*MockFlowBatch)(nil).LoadCommittedFileNames), ts, nasIP)
+}
+
+// RemoveByNasIP mocks base method.
+func (m *MockFlowBatch) RemoveByNasIP(ts transaction.Session, nasIP string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveByNasIP", ts, nasIP)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveByNasIP indicates an expected call of RemoveByNasIP.
+func (mr *MockFlowBatchMockRecorder) RemoveByNasIP(ts, nasIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveByNasIP", reflect.TypeOf((*MockFlowBatch)(nil).RemoveByNasIP), ts, nasIP)
+}
+
+// SaveFileNames mocks base method.
+func (m *MockFlowBatch) SaveFileNames(ts transaction.Session, nasIP string, fileNameList []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveFileNames", ts, nasIP, fileNameList)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveFileNames indicates an expected call of SaveFileNames.
+func (mr *MockFlowBatchMockRecorder) SaveFileNames(ts, nasIP, fileNameList any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveFileNames", reflect.TypeOf((*MockFlowBatch)(nil).SaveFileNames), ts, nasIP, fileNameList)
+}
+
 // MockFlow is a mock of Flow interface.
 type MockFlow struct {
 	ctrl     *gomock.Controller

@@ -30,9 +30,10 @@ func NewTestRepositoryImports(
 		Config:         config,
 		SessionManager: transaction.NewMockSessionManager(ctrl),
 		MockRepository: MockRepository{
-			Session: repository.NewMockSession(ctrl),
-			Channel: repository.NewMockChannel(ctrl),
-			Flow:    repository.NewMockFlow(ctrl),
+			Session:   repository.NewMockSession(ctrl),
+			Channel:   repository.NewMockChannel(ctrl),
+			Flow:      repository.NewMockFlow(ctrl),
+			FlowBatch: repository.NewMockFlowBatch(ctrl),
 		},
 	}
 }
@@ -42,9 +43,10 @@ func (t *TestRepositoryImports) RepositoryImports() RepositoryImports {
 		SessionManager: t.SessionManager,
 		Config:         t.Config,
 		Repository: Repository{
-			Session: t.MockRepository.Session,
-			Channel: t.MockRepository.Channel,
-			Flow:    t.MockRepository.Flow,
+			Session:   t.MockRepository.Session,
+			Channel:   t.MockRepository.Channel,
+			Flow:      t.MockRepository.Flow,
+			FlowBatch: t.MockRepository.FlowBatch,
 		},
 	}
 }
