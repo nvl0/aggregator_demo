@@ -10,6 +10,7 @@ import (
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
 	"context"
+	"errors"
 	"testing"
 
 	"go.uber.org/mock/gomock"
@@ -145,21 +146,15 @@ func TestAggregate(t *testing.T) {
 	}
 
 	const (
-		nasIP  = "127.0.0.0"
-		ip1    = "127.0.0.1"
-		sessID = 1
+		nasIP   = "127.0.0.0"
+		ip1     = "127.0.0.1"
+		sessID  = 1
+		newFile = "ft-01.01.2026-00:05:00"
+		oldFile = "ft-01.01.2026-00:00:00"
 	)
 
-	tests := []struct {
-		name    string
-		prepare func(f *fields)
-		args    args
-	}{
-		{
-			name: "успешный результат",
-			prepare: func(f *fields) {
-				flowStr :=
-					`132,127.0.0.1,127.0.0.2
+	flowStr :=
+		`132,127.0.0.1,127.0.0.2
 456,127.0.0.2,127.0.0.1
 234,127.0.0.1,127.0.0.2
 345,127.0.0.2,127.0.0.1
@@ -168,66 +163,177 @@ func TestAggregate(t *testing.T) {
 7856,127.0.0.1,34.249.117.10
 221,34.249.117.10,127.0.0.1`
 
-				channelMap := map[channel.ID]bool{
-					channel.Internal: true,
-					channel.External: false,
-				}
-				trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
-					ip1: {
-						channel.Internal: {
-							Download: 366,
-							Upload:   801,
-						},
-						channel.External: {
-							Download: 8390,
-							Upload:   568,
-						},
-					},
-				}
-				sessionList := []session.OnlineSession{
-					{
-						SessID: sessID,
-						NasIP:  nasIP,
-						IP:     ip1,
-					},
-				}
-				chunkList := []session.Chunk{
-					{
-						SessID:    sessID,
-						ChannelID: int(channel.Internal),
-						Download:  64,
-						Upload:    2,
-					},
-				}
+	channelMap := map[channel.ID]bool{
+		channel.Internal: true,
+		channel.External: false,
+	}
+	trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
+		ip1: {
+			channel.Internal: {
+				Download: 366,
+				Upload:   801,
+			},
+			channel.External: {
+				Download: 8390,
+				Upload:   568,
+			},
+		},
+	}
+	sessionList := []session.OnlineSession{
+		{
+			SessID: sessID,
+			NasIP:  nasIP,
+			IP:     ip1,
+		},
+	}
+	chunkList := []session.Chunk{
+		{
+			SessID:    sessID,
+			ChannelID: int(channel.Internal),
+			Download:  64,
+			Upload:    2,
+		},
+	}
+
+	tests := []struct {
+		name    string
+		prepare func(f *fields)
+		args    args
+	}{
+		{
+			name: "обычный цикл без чекпоинта",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				// три транзакции: загрузка чекпоинта, сохранение чанков, удаление чекпоинта
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
+				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				gomock.InOrder(
-					f.bi.TestBridge.Flow.EXPECT().PrepareFlow(nasIP, map[string]bool(nil)).
-						Return(flowStr, []string{"ft-test_file"}, nil),
-					f.bi.TestBridge.Traffic.EXPECT().ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
-						SiftTraffic(channelMap, trafficMap, sessionList).
-						Return(chunkList, nil),
-					f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts),
-					f.ts.EXPECT().Start().Return(nil),
+						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ts.EXPECT().Rollback().Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
 			args: args{
-				nasIP: nasIP,
-				sessionList: []session.OnlineSession{
-					{
-						SessID: sessID,
-						NasIP:  nasIP,
-						IP:     ip1,
-					},
-				},
-				channelMap: map[channel.ID]bool{
-					channel.Internal: true,
-					channel.External: false,
-				},
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "чистый replay, чанки повторно не пишутся",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{oldFile: true}
+				fileNameList := []string{oldFile}
+
+				// две транзакции: загрузка чекпоинта и его удаление,
+				// транзакция сохранения чанков не открывается
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return("", fileNameList, nil),
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+				)
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "смешанный набор, в чекпоинт пишется полный список",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{oldFile: true}
+				fileNameList := []string{oldFile, newFile}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
+				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Rollback().Return(nil).Times(3)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					// flowStr содержит только новый файл, старый пропущен в ReadFlow
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					// в чекпоинт уходит и уже известный oldFile, и новый newFile
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+				)
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "ошибка RemoveOld, чекпоинт не удаляется",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				// две транзакции: загрузка чекпоинта и сохранение чанков,
+				// транзакция удаления чекпоинта не открывается
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						RemoveOld(nasIP).Return(errors.New("диск недоступен")),
+				)
+
+				// RemoveByNasIP не ожидается: чекпоинт обязан пережить неудачную очистку
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
 			},
 		},
 	}
