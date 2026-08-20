@@ -17,29 +17,30 @@ var (
 )
 
 func TestPrepareFlow(t *testing.T) {
-	r := require.New(t)
-
 	type fields struct {
 		ri rimport.TestRepositoryImports
 		bi *bimport.TestBridgeImports
 		ts *transaction.MockSession
 	}
 	type args struct {
-		dirName string
+		dirName       string
+		skipFileNames map[string]bool
 	}
 
 	const (
 		dirName  = "test_dir"
 		fileName = "ft-test_file"
+		oldFile  = "ft-old_file"
 		output   = "test_output"
 	)
 
 	tests := []struct {
-		name    string
-		prepare func(f *fields)
-		args    args
-		err     error
-		data    string
+		name             string
+		prepare          func(f *fields)
+		args             args
+		err              error
+		data             string
+		wantFileNameList []string
 	}{
 		{
 			name: "успешный результат",
@@ -47,21 +48,52 @@ func TestPrepareFlow(t *testing.T) {
 				fileNameListInDir := []string{fileName}
 
 				gomock.InOrder(
-					f.ri.MockRepository.Flow.EXPECT().ReadFileNamesInFlowDir(dirName).Return(fileNameListInDir, nil),
-					f.ri.MockRepository.Flow.EXPECT().MoveFlowToTempDir(dirName, fileName).Return(nil),
-					f.ri.MockRepository.Flow.EXPECT().ReadFlow(dirName).Return(output, nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						ReadFileNamesInFlowDir(dirName).Return(fileNameListInDir, nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						MoveFlowToTempDir(dirName, fileName).Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						ReadFlow(dirName, map[string]bool(nil)).
+						Return(output, []string{fileName}, nil),
 				)
 			},
 			args: args{
 				dirName: dirName,
 			},
-			err:  nil,
-			data: output,
+			err:              nil,
+			data:             output,
+			wantFileNameList: []string{fileName},
+		},
+		{
+			name: "закоммиченный файл пропускается, но остается в списке",
+			prepare: func(f *fields) {
+				fileNameListInDir := []string{fileName}
+				skipFileNames := map[string]bool{oldFile: true}
+
+				gomock.InOrder(
+					f.ri.MockRepository.Flow.EXPECT().
+						ReadFileNamesInFlowDir(dirName).Return(fileNameListInDir, nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						MoveFlowToTempDir(dirName, fileName).Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().
+						ReadFlow(dirName, skipFileNames).
+						Return(output, []string{oldFile, fileName}, nil),
+				)
+			},
+			args: args{
+				dirName:       dirName,
+				skipFileNames: map[string]bool{oldFile: true},
+			},
+			err:              nil,
+			data:             output,
+			wantFileNameList: []string{oldFile, fileName},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			r := require.New(t)
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			f := fields{
@@ -75,9 +107,10 @@ func TestPrepareFlow(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
 
-			data, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName)
+			data, fileNameList, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName, tt.args.skipFileNames)
 			r.Equal(tt.err, err)
 			r.Equal(tt.data, data)
+			r.Equal(tt.wantFileNameList, fileNameList)
 		})
 	}
 }

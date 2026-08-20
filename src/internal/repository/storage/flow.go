@@ -6,6 +6,7 @@ import (
 	"aggregator/src/internal/repository"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type flowRepository struct {
@@ -77,13 +78,19 @@ func (r *flowRepository) MoveFlowToTempDir(dirName, fileName string) error {
 	)
 }
 
-// ReadFlow считать бинарник flow по пути
-func (r *flowRepository) ReadFlow(dirName string) (output string, err error) {
+// ReadFlow считать бинарники flow из директории tmp.
+// Содержимое файлов, перечисленных в skipFileNames, в output не попадает:
+// их чанки уже закоммичены в предыдущем цикле и повторный подсчет задвоил бы трафик.
+// fileNameList содержит имена всех найденных flow файлов, включая пропущенные.
+func (r *flowRepository) ReadFlow(
+	dirName string,
+	skipFileNames map[string]bool,
+) (output string, fileNameList []string, err error) {
 	path := fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir)
 
 	dirList, err := os.ReadDir(path)
 	if err != nil {
-		return output, err
+		return output, fileNameList, err
 	}
 
 	var (
@@ -92,17 +99,28 @@ func (r *flowRepository) ReadFlow(dirName string) (output string, err error) {
 	)
 
 	for _, dir := range dirList {
-		if !dir.IsDir() {
-			b, err = os.ReadFile(fmt.Sprintf("%s/%s", path, dir.Name()))
-			if err != nil {
-				return output, err
-			}
-			sumB = append(sumB, b...)
+		// вложенные директории и служебные файлы (.gitkeep) не являются flow
+		if dir.IsDir() || !strings.Contains(dir.Name(), flow.FlowNameSubStr) {
+			continue
 		}
+
+		fileNameList = append(fileNameList, dir.Name())
+
+		if skipFileNames[dir.Name()] {
+			continue
+		}
+
+		b, err = os.ReadFile(fmt.Sprintf("%s/%s", path, dir.Name()))
+		if err != nil {
+			return output, fileNameList, err
+		}
+
+		sumB = append(sumB, b...)
 	}
 
 	output = string(sumB)
-	return output, err
+
+	return output, fileNameList, err
 }
 
 // RemoveOld удаляет старый flow

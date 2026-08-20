@@ -44,18 +44,19 @@ func (m *MockFlow) EXPECT() *MockFlowMockRecorder {
 }
 
 // PrepareFlow mocks base method.
-func (m *MockFlow) PrepareFlow(dirName string) (string, error) {
+func (m *MockFlow) PrepareFlow(dirName string, skipFileNames map[string]bool) (string, []string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareFlow", dirName)
+	ret := m.ctrl.Call(m, "PrepareFlow", dirName, skipFileNames)
 	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // PrepareFlow indicates an expected call of PrepareFlow.
-func (mr *MockFlowMockRecorder) PrepareFlow(dirName any) *gomock.Call {
+func (mr *MockFlowMockRecorder) PrepareFlow(dirName, skipFileNames any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareFlow", reflect.TypeOf((*MockFlow)(nil).PrepareFlow), dirName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareFlow", reflect.TypeOf((*MockFlow)(nil).PrepareFlow), dirName, skipFileNames)
 }
 
 // MockSession is a mock of Session interface.

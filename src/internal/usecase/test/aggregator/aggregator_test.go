@@ -201,7 +201,8 @@ func TestAggregate(t *testing.T) {
 				}
 
 				gomock.InOrder(
-					f.bi.TestBridge.Flow.EXPECT().PrepareFlow(nasIP).Return(flowStr, nil),
+					f.bi.TestBridge.Flow.EXPECT().PrepareFlow(nasIP, map[string]bool(nil)).
+						Return(flowStr, []string{"ft-test_file"}, nil),
 					f.bi.TestBridge.Traffic.EXPECT().ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).

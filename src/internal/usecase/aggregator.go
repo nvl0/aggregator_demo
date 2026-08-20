@@ -186,7 +186,8 @@ func (u *AggregatorUsecase) Aggregate(
 	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
+	// skipFileNames и fileNameList начинают использоваться в следующей задаче
+	flow, _, err := u.Bridge.Flow.PrepareFlow(nasIP, nil)
 	if err != nil {
 		return
 	}

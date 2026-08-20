@@ -231,18 +231,19 @@ func (mr *MockFlowMockRecorder) ReadFileNamesInFlowDir(dirName any) *gomock.Call
 }
 
 // ReadFlow mocks base method.
-func (m *MockFlow) ReadFlow(dirName string) (string, error) {
+func (m *MockFlow) ReadFlow(dirName string, skipFileNames map[string]bool) (string, []string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFlow", dirName)
+	ret := m.ctrl.Call(m, "ReadFlow", dirName, skipFileNames)
 	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // ReadFlow indicates an expected call of ReadFlow.
-func (mr *MockFlowMockRecorder) ReadFlow(dirName any) *gomock.Call {
+func (mr *MockFlowMockRecorder) ReadFlow(dirName, skipFileNames any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFlow", reflect.TypeOf((*MockFlow)(nil).ReadFlow), dirName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFlow", reflect.TypeOf((*MockFlow)(nil).ReadFlow), dirName, skipFileNames)
 }
 
 // ReadFlowDirNames mocks base method.

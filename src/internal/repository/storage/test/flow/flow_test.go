@@ -98,41 +98,72 @@ func TestMoveFlowToTempDir(t *testing.T) {
 	})
 }
 
+// TestReadFlow чтение flow из tmp с пропуском уже закоммиченных файлов
 func TestReadFlow(t *testing.T) {
-	r := require.New(t)
-
 	const (
-		dirName  = "test_dir"
-		fileName = "test_file"
-		fileData = `#:doctets,srcaddr,dstaddr
-4123,127.0.0.1,127.0.0.2`
+		dirName   = "test_dir"
+		fileName1 = "ft-01.01.2026-00:00:00"
+		fileName2 = "ft-01.01.2026-00:05:00"
+		fileData1 = "#:doctets,srcaddr,dstaddr\n4123,127.0.0.1,127.0.0.2\n"
+		fileData2 = "#:doctets,srcaddr,dstaddr\n5670,127.0.0.1,127.0.0.3\n"
 	)
 
-	path := fmt.Sprintf("%s/%s", flowDir, dirName)
+	tests := []struct {
+		name             string
+		skipFileNames    map[string]bool
+		wantOutput       string
+		wantFileNameList []string
+	}{
+		{
+			name:             "все файлы новые",
+			skipFileNames:    nil,
+			wantOutput:       fileData1 + fileData2,
+			wantFileNameList: []string{fileName1, fileName2},
+		},
+		{
+			name:             "первый файл уже закоммичен",
+			skipFileNames:    map[string]bool{fileName1: true},
+			wantOutput:       fileData2,
+			wantFileNameList: []string{fileName1, fileName2},
+		},
+		{
+			name:             "все файлы уже закоммичены",
+			skipFileNames:    map[string]bool{fileName1: true, fileName2: true},
+			wantOutput:       "",
+			wantFileNameList: []string{fileName1, fileName2},
+		},
+	}
 
-	r.NoError(os.Mkdir(path, flow.AllRWX))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := require.New(t)
 
-	tmpPath := fmt.Sprintf("%s/%s", path, flow.FlowTempDir)
+			path := fmt.Sprintf("%s/%s", flowDir, dirName)
+			r.NoError(os.Mkdir(path, flow.AllRWX))
 
-	r.NoError(os.Mkdir(tmpPath, flow.AllRWX))
+			t.Cleanup(func() {
+				os.RemoveAll(path)
+			})
 
-	fileDisabled, err := os.Create(fmt.Sprintf("%s/%s", tmpPath, fileName))
-	r.NoError(err)
+			tmpPath := fmt.Sprintf("%s/%s", path, flow.FlowTempDir)
+			r.NoError(os.Mkdir(tmpPath, flow.AllRWX))
 
-	_, err = fileDisabled.WriteString(fileData)
-	r.NoError(err)
+			r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, fileName1),
+				[]byte(fileData1), flow.AllRWX))
+			r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, fileName2),
+				[]byte(fileData2), flow.AllRWX))
+			// служебный файл git не является flow: ни в output, ни в fileNameList он попадать не должен
+			r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, flow.GitKeepName),
+				[]byte{}, flow.AllRWX))
 
-	t.Cleanup(func() {
-		os.RemoveAll(path)
-	})
+			repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
 
-	repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
-
-	t.Run("чтение flow", func(_ *testing.T) {
-		data, errRead := repo.ReadFlow(dirName)
-		r.NoError(errRead)
-		r.Equal(fileData, data)
-	})
+			output, fileNameList, err := repo.ReadFlow(dirName, tt.skipFileNames)
+			r.NoError(err)
+			r.Equal(tt.wantOutput, output)
+			r.Equal(tt.wantFileNameList, fileNameList)
+		})
+	}
 }
 
 func TestRemoveOld(t *testing.T) {
