@@ -3,6 +3,7 @@ package workerpool_test
 import (
 	"aggregator/src/tools/workerpool"
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -181,4 +182,81 @@ func TestWait(t *testing.T) {
 
 	p.Wait()
 	require.EqualValues(t, taskCount, done.Load(), "завершилось не столько горутин, сколько ожидалось")
+}
+
+// TestGoRecover паника в одной задаче не роняет пул, не выходит наружу
+// за пределы Go/Wait и не приводит к утечке слота семафора
+func TestGoRecover(t *testing.T) {
+	const (
+		taskCount  = 10
+		panicValue = "паника тестовой задачи"
+	)
+
+	tests := []struct {
+		name        string
+		withOnPanic bool
+		assertFunc  func(t *testing.T, recoveredList []any)
+	}{
+		{
+			name:        "колбэк получает восстановленное значение",
+			withOnPanic: true,
+			assertFunc: func(t *testing.T, recoveredList []any) {
+				require.Len(t, recoveredList, 1, "onPanic вызван не один раз")
+				assert.Equal(
+					t,
+					panicValue,
+					recoveredList[0],
+					"onPanic получил не то значение, которое было передано в panic",
+				)
+			},
+		},
+		{
+			name:        "без колбэка паника гасится молча",
+			withOnPanic: false,
+			assertFunc: func(t *testing.T, recoveredList []any) {
+				assert.Empty(t, recoveredList, "onPanic не задан, но что-то было записано")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				mu            sync.Mutex
+				recoveredList []any
+				done          atomic.Int32
+			)
+
+			optList := make([]workerpool.Option, 0, 1)
+			if tt.withOnPanic {
+				optList = append(optList, workerpool.WithOnPanic(func(recovered any) {
+					mu.Lock()
+					defer mu.Unlock()
+
+					recoveredList = append(recoveredList, recovered)
+				}))
+			}
+
+			// размер пула 1: если паника не освободит слот семафора,
+			// следующий Go заблокируется навсегда и тест упадет по таймауту
+			p := workerpool.New(1, optList...)
+
+			ok := p.Go(context.Background(), func() { panic(panicValue) })
+			require.True(t, ok, "Go вернул false при неотмененном контексте")
+
+			for range taskCount {
+				ok = p.Go(context.Background(), func() { done.Add(1) })
+				require.True(t, ok, "Go вернул false после паники в другой задаче")
+			}
+
+			p.Wait()
+			require.EqualValues(t, taskCount, done.Load(),
+				"после паники выполнились не все оставшиеся задачи")
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			tt.assertFunc(t, recoveredList)
+		})
+	}
 }

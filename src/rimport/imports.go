@@ -37,6 +37,7 @@ func NewRepositoryImports(
 			Channel: postgresql.NewChannelRepository(),
 			Flow: storage.NewFlowRepository(os.Getenv("FLOW_DIR"),
 				os.Getenv("SUBNET_DISABLED_DIR")),
+			FlowBatch: postgresql.NewFlowBatchRepository(),
 		},
 	}
 }

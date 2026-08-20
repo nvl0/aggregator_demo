@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/sirupsen/logrus"
 )
@@ -94,7 +95,12 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	u.measure.Result()
 
-	pool := workerpool.New(u.poolSize)
+	pool := workerpool.New(u.poolSize, workerpool.WithOnPanic(func(recovered any) {
+		u.log.WithFields(logrus.Fields{
+			"recovered": recovered,
+			"stack":     string(debug.Stack()),
+		}).Errorln("паника воркера агрегации, обработка nas_ip прервана")
+	}))
 
 	// название директории совпадает с session.NasIP
 	for _, nasIP := range dirList {
@@ -185,13 +191,29 @@ func (u *AggregatorUsecase) Aggregate(
 
 	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
 
+	// имена flow файлов, чанки которых уже закоммичены в одном из предыдущих циклов
+	committedFileNames, err := u.loadCommittedFileNames(nasIP)
+	if err != nil {
+		return
+	}
+
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	flow, err := u.Bridge.Flow.PrepareFlow(nasIP)
+	flow, fileNameList, err := u.Bridge.Flow.PrepareFlow(nasIP, committedFileNames)
 	if err != nil {
 		return
 	}
 	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
 	u.log.WithFields(lf).Debugf("размер flow %d", len([]rune(flow)))
+
+	// весь tmp состоит из уже закоммиченных файлов: предыдущий цикл упал
+	// между коммитом чанков и очисткой tmp. Считать нечего, нужно лишь завершить очистку
+	if !hasNewFile(fileNameList, committedFileNames) {
+		u.log.WithFields(lf).Debugln("новых flow файлов нет, повторная очистка tmp")
+		u.removeOldFlow(nasIP)
+		m.Result()
+
+		return
+	}
 
 	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
 	m.Start(parseFlowLogName)
@@ -212,29 +234,114 @@ func (u *AggregatorUsecase) Aggregate(
 	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
 	u.log.Debugln("актуальный результат", dump.Struct(chunkList))
 
+	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков и чекпоинта в бд", nasIP)
+	m.Start(saveChunkListLogName)
+	if err = u.saveChunkListWithCheckpoint(nasIP, chunkList, fileNameList); err != nil {
+		return
+	}
+	m.Stop(saveChunkListLogName)
+
+	u.removeOldFlow(nasIP)
+
+	m.Result()
+}
+
+// hasNewFile проверка, что среди файлов есть хотя бы один незакоммиченный
+func hasNewFile(fileNameList []string, committedFileNames map[string]bool) bool {
+	for _, fileName := range fileNameList {
+		if !committedFileNames[fileName] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// loadCommittedFileNames загрузка имен flow файлов, чанки которых уже закоммичены
+func (u *AggregatorUsecase) loadCommittedFileNames(nasIP string) (fileNameSet map[string]bool, err error) {
+	lf := logrus.Fields{
+		"nas_ip": nasIP,
+	}
+
 	ts := u.SessionManager.CreateSession()
 	if err = ts.Start(); err != nil {
+		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		return fileNameSet, err
+	}
+	defer func() { _ = ts.Rollback() }()
+
+	if fileNameSet, err = u.Repository.FlowBatch.LoadCommittedFileNames(ts, nasIP); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось загрузить чекпоинт flow файлов, ошибка", err)
+		return fileNameSet, err
+	}
+
+	return fileNameSet, err
+}
+
+// saveChunkListWithCheckpoint сохранение чанков сессии и чекпоинта flow файлов
+// в одной транзакции: чекпоинт пишется в той же транзакции, что и чанки, и содержит
+// весь список файлов из tmp, а не только новые. Если очистка tmp не удастся или процесс
+// упадет сразу после коммита, следующий цикл не посчитает эти файлы повторно
+func (u *AggregatorUsecase) saveChunkListWithCheckpoint(
+	nasIP string,
+	chunkList []session.Chunk,
+	fileNameList []string,
+) error {
+	lf := logrus.Fields{
+		"nas_ip": nasIP,
+	}
+
+	ts := u.SessionManager.CreateSession()
+	if err := ts.Start(); err != nil {
+		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		return err
+	}
+	defer func() { _ = ts.Rollback() }()
+
+	if err := u.Repository.Session.SaveChunkList(ts, chunkList); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось сохранить чанки, ошибка", err)
+		return err
+	}
+
+	if err := u.Repository.FlowBatch.SaveFileNames(ts, nasIP, fileNameList); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось сохранить чекпоинт flow файлов, ошибка", err)
+		return err
+	}
+
+	if err := ts.Commit(); err != nil {
+		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
+		return err
+	}
+
+	return nil
+}
+
+// removeOldFlow удаление обработанного flow вместе с чекпоинтом.
+// Если удалить файлы не удалось, записи чекпоинта намеренно остаются в бд:
+// именно они защищают от повторного подсчета этих файлов на следующем цикле
+func (u *AggregatorUsecase) removeOldFlow(nasIP string) {
+	lf := logrus.Fields{
+		"nas_ip": nasIP,
+	}
+
+	if err := u.Repository.Flow.RemoveOld(nasIP); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось удалить старый flow, ошибка", err)
+		return
+	}
+
+	ts := u.SessionManager.CreateSession()
+	if err := ts.Start(); err != nil {
 		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
 		return
 	}
 	defer func() { _ = ts.Rollback() }()
 
-	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков сессии в бд", nasIP)
-	m.Start(saveChunkListLogName)
-	if err = u.Repository.Session.SaveChunkList(ts, chunkList); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось сохранить чанки, ошибка", err)
+	if err := u.Repository.FlowBatch.RemoveByNasIP(ts, nasIP); err != nil {
+		u.log.WithFields(lf).Errorln("не удалось удалить чекпоинт flow файлов, ошибка", err)
 		return
 	}
-	m.Stop(saveChunkListLogName)
 
-	if err = ts.Commit(); err != nil {
+	if err := ts.Commit(); err != nil {
 		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
-		return
 	}
-
-	if err = u.Repository.Flow.RemoveOld(nasIP); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось удалить старый flow, ошибка", err)
-	}
-
-	m.Result()
 }

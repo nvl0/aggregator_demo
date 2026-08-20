@@ -24,8 +24,7 @@ services:
         "/migration",
         "-database",
         "postgres://aggregator:aggregator@db:5432/aggregator?sslmode=disable",
-        "up",
-        "1"
+        "up"
       ]
     depends_on:
       db:

@@ -8,7 +8,8 @@ import (
 )
 
 type Flow interface {
-	PrepareFlow(dirName string) (flow string, err error)
+	PrepareFlow(dirName string, skipFileNames map[string]bool) (
+		flow string, fileNameList []string, err error)
 }
 
 type Session interface {

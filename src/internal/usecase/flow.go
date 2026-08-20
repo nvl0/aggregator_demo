@@ -28,8 +28,13 @@ func NewFlowUsecase(
 	}
 }
 
-// PrepareFlow подготовка flow файла
-func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
+// PrepareFlow подготовка flow файла.
+// skipFileNames — имена файлов, чанки которых уже закоммичены: их содержимое
+// в flowStr не попадает, но имена возвращаются в fileNameList.
+func (u *FlowUsecase) PrepareFlow(
+	dirName string,
+	skipFileNames map[string]bool,
+) (flowStr string, fileNameList []string, err error) {
 	lf := logrus.Fields{
 		"dir_name": dirName,
 	}
@@ -46,24 +51,24 @@ func (u *FlowUsecase) PrepareFlow(dirName string) (flowStr string, err error) {
 				// перенос flow файла в директорию ./tmp
 				if err = u.Repository.Flow.MoveFlowToTempDir(dirName, fileName); err != nil {
 					u.log.WithFields(lf).Errorln("не удалось переместить готовый flow в tmp, ошибка", err)
-					return flowStr, err
+					return flowStr, fileNameList, err
 				}
 			}
 		}
 
 		// чтение flow файла с директории ./tmp
-		if flowStr, err = u.Repository.Flow.ReadFlow(dirName); err != nil {
+		if flowStr, fileNameList, err = u.Repository.Flow.ReadFlow(dirName, skipFileNames); err != nil {
 			u.log.WithFields(lf).Errorln("не удалось считать готовый flow с директории, ошибка", err)
 			err = global.ErrInternalError
-			return flowStr, err
+			return flowStr, fileNameList, err
 		}
 
-		return flowStr, err
+		return flowStr, fileNameList, err
 	case errors.Is(err, global.ErrNoData):
-		return flowStr, err
+		return flowStr, fileNameList, err
 	default:
 		u.log.WithFields(lf).Errorln("не удалось просмотреть директорию, ошибка", err)
 		err = global.ErrInternalError
-		return flowStr, err
+		return flowStr, fileNameList, err
 	}
 }
