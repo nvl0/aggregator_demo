@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 )
@@ -67,29 +68,35 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		}
 	}
 
-	chanChan := make(chan map[channel.ID]bool)
-	sessChan := make(chan map[session.NasIP][]session.OnlineSession)
+	// буфер на 1: отправка результата в горутине не блокируется, даже если
+	// вызывающий вышел по ошибке и не стал читать канал
+	chanChan := make(chan map[channel.ID]bool, 1)
+	sessChan := make(chan map[session.NasIP][]session.OnlineSession, 1)
 
+	var loaders sync.WaitGroup
+	loaders.Add(2)
 	// получение мапки каналов
-	go u.loadChannelMap(chanChan)
+	go func() { defer loaders.Done(); u.loadChannelMap(chanChan) }()
 	// получение мапки сессий
-	go u.loadOnlineSessionMap(sessChan)
+	go func() { defer loaders.Done(); u.loadOnlineSessionMap(sessChan) }()
 
 	u.measure.Start("получение списка директорий")
 	dirList, err := u.Repository.Flow.ReadFlowDirNames()
 	if err != nil {
 		u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
+		loaders.Wait() // не оставляем загрузочные горутины висеть
 		return
 	}
 	u.measure.Stop("получение списка директорий")
 	u.log.Debugf("количество директорий %d", len(dirList))
 
 	channelMap := <-chanChan
-	if channelMap == nil {
-		return
-	}
 	sessionMap := <-sessChan
-	if sessionMap == nil {
+	// обе загрузочные горутины докатывают defer'ы (Rollback транзакций, measure.Stop)
+	// до того, как метод пойдет дальше или вернется
+	loaders.Wait()
+
+	if channelMap == nil || sessionMap == nil {
 		return
 	}
 
