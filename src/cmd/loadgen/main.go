@@ -198,7 +198,7 @@ func runCycle(conf config.Config) (elapsed time.Duration, err error) {
 		return elapsed, err
 	}
 
-	ri := rimport.NewRepositoryImports(transaction.NewSQLSessionManager(pgDB))
+	ri := rimport.NewRepositoryImports(conf, transaction.NewSQLSessionManager(pgDB))
 	bi := bimport.NewEmptyBridge()
 	ui := uimport.NewUsecaseImports(log, ri, bi)
 

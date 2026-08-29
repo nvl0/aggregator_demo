@@ -11,8 +11,8 @@ type OnlineSession struct {
 type Chunk struct {
 	SessID    int `db:"sess_id"`
 	ChannelID int `db:"channel_id"`
-	Download  int `db:"upload"`
-	Upload    int `db:"download"`
+	Download  int `db:"download"`
+	Upload    int `db:"upload"`
 }
 
 // NewChunk конструктор

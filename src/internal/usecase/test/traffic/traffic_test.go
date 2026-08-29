@@ -3,6 +3,7 @@ package traffic_test
 import (
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
+	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/internal/transaction"
@@ -440,6 +441,36 @@ func TestParseFlow(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			// строки распарсились, но обе стороны во внешней сети — internal трафика нет.
+			// это не сбой: Aggregate по ErrNoData имеет право убрать такой flow из tmp
+			name: "flow только с external, internal трафика нет",
+			args: args{
+				channelMap: map[channel.ID]bool{
+					channel.External: true,
+					channel.Internal: false,
+				},
+				flow: `100,8.8.8.8,9.9.9.9
+200,9.9.9.9,8.8.8.8`,
+			},
+			err:  global.ErrNoData,
+			data: map[session.IP]map[channel.ID]traffic.Traffic{},
+		},
+		{
+			// ни одной валидной строки (дрейф формата flow) — это сбой обработки,
+			// Aggregate по ErrInternalError оставит flow в tmp, а не удалит
+			name: "flow из нераспарсиваемых строк",
+			args: args{
+				channelMap: map[channel.ID]bool{
+					channel.External: true,
+					channel.Internal: true,
+				},
+				flow: `notanumber,127.0.0.1,127.0.0.2
+also-broken,127.0.0.2,127.0.0.1`,
+			},
+			err:  global.ErrInternalError,
+			data: map[session.IP]map[channel.ID]traffic.Traffic{},
 		},
 	}
 

@@ -53,6 +53,12 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		rowArgs []string
 		// запись полученная при парсинге агрументов одного ряда
 		record flow.Record
+		// ошибка проверки принадлежности IP к блоку internal
+		containsErr error
+		// количество успешно распарсенных строк
+		parsedRecords int
+		// количество строк, которые не удалось классифицировать по блоку internal
+		classifyErrCount int
 	)
 
 	// построчная разбивка flowStr
@@ -88,9 +94,19 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 					continue
 				}
 
-				// определение принадлежности отправителя/получателя к сети
-				isSrcInternal, _ = u.internalNet.Contains(record.SrcIP)
-				isDstInternal, _ = u.internalNet.Contains(record.DstIP)
+				parsedRecords++
+
+				// определение принадлежности отправителя/получателя к сети.
+				// ошибку не логируем построчно (систематический сбой затопит лог) —
+				// копим счетчик и пишем один итог после цикла
+				isSrcInternal, containsErr = u.internalNet.Contains(record.SrcIP)
+				if containsErr == nil {
+					isDstInternal, containsErr = u.internalNet.Contains(record.DstIP)
+				}
+				if containsErr != nil {
+					classifyErrCount++
+					continue
+				}
 
 				switch {
 				// получатель и отправитель внутри сети internal
@@ -138,8 +154,23 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		}
 	}
 
+	if classifyErrCount > 0 {
+		u.log.WithField("count", classifyErrCount).
+			Warnln("не удалось проверить принадлежность IP к блоку internal, строки пропущены")
+	}
+
 	if len(trafficMap) == 0 {
-		err = global.ErrNoData
+		switch {
+		// ни одной валидной строки (дрейф формата flow) либо ни одну строку
+		// не удалось классифицировать: это не "нет трафика", а сбой обработки.
+		// flow оставляем на диске, не отдаем на удаление в Aggregate
+		case parsedRecords == 0, classifyErrCount == parsedRecords:
+			err = global.ErrInternalError
+		// строки распарсились, но внутреннего трафика нет (flow только с external) —
+		// можно двигаться дальше и убрать файлы
+		default:
+			err = global.ErrNoData
+		}
 	}
 
 	return trafficMap, err
