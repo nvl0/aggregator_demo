@@ -20,15 +20,12 @@ type RepositoryImports struct {
 	Repository     Repository
 }
 
+// NewRepositoryImports собирает репозитории. Конфиг передается снаружи:
+// он уже загружен в main и повторный парсинг файла не нужен.
 func NewRepositoryImports(
+	conf config.Config,
 	sessionManager transaction.SessionManager,
 ) RepositoryImports {
-	conf, err := config.NewConfig(os.Getenv("CONF_PATH"))
-	if err != nil {
-		newFatalLogger().Error(err.Error())
-		os.Exit(1)
-	}
-
 	return RepositoryImports{
 		Config:         conf,
 		SessionManager: sessionManager,

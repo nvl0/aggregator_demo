@@ -47,6 +47,8 @@ func (t *sqlSession) Commit() (err error) {
 		err = ErrClosed
 	default:
 		err = t.currentTx.Commit()
+		t.init = false
+		t.currentTx = nil
 	}
 
 	return err

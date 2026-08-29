@@ -27,11 +27,6 @@ func NewUsecaseImports(
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
 ) UsecaseImports {
-	config, err := config.NewConfig(os.Getenv("CONF_PATH"))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
 	// создание блока исключенных из подсчета адресов
 	internalNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
 		os.Getenv("SUBNET_DISABLED_DIR"), flow.InternalDisabled))
@@ -40,7 +35,7 @@ func NewUsecaseImports(
 	}
 
 	ui := UsecaseImports{
-		Config:         config,
+		Config:         ri.Config,
 		SessionManager: ri.SessionManager,
 
 		Usecase: Usecase{

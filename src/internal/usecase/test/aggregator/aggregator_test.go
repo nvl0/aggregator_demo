@@ -3,6 +3,7 @@ package aggregator_test
 import (
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
+	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/internal/transaction"
@@ -366,6 +367,98 @@ func TestAggregate(t *testing.T) {
 				)
 
 				// RemoveByNasIP не ожидается: чекпоинт обязан пережить неудачную очистку
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "ParseFlow без учитываемого трафика, tmp очищается без чекпоинта",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				// две транзакции: загрузка чекпоинта и его удаление при очистке tmp,
+				// транзакция сохранения чанков не открывается
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(nil, global.ErrNoData),
+					// файлы уже в tmp: их обязательно нужно убрать, иначе они копятся
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+				)
+
+				// SaveChunkList / SaveFileNames не ожидаются: сохранять нечего
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "SiftTraffic без данных, tmp очищается без чекпоинта",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
+				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).Return(nil, global.ErrNoData),
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+				)
+			},
+			args: args{
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "ParseFlow не распознал flow, tmp не трогаем",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				// одна транзакция: только загрузка чекпоинта.
+				// очистка tmp не вызывается — flow должен остаться на диске
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
+				f.ts.EXPECT().Start().Return(nil).Times(1)
+				f.ts.EXPECT().Rollback().Return(nil).Times(1)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(nil, global.ErrInternalError),
+				)
+
+				// RemoveOld / RemoveByNasIP не ожидаются
 			},
 			args: args{
 				nasIP:       nasIP,

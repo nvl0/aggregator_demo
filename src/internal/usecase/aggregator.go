@@ -3,6 +3,7 @@ package usecase
 import (
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
+	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/dump"
@@ -10,6 +11,7 @@ import (
 	"aggregator/src/tools/measure"
 	"aggregator/src/tools/workerpool"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -225,7 +227,20 @@ func (u *AggregatorUsecase) Aggregate(
 	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
 	m.Start(parseFlowLogName)
 	trafficMap, err := u.Bridge.Traffic.ParseFlow(channelMap, flow)
-	if err != nil {
+	switch {
+	case errors.Is(err, global.ErrNoData):
+		// flow распарсен, но учитываемого (internal) трафика в нем нет — только external.
+		// считать нечего, файлы нужно убрать из tmp, иначе они копятся
+		// и перечитываются на каждом цикле
+		u.log.WithFields(lf).Warnln("во flow нет internal трафика, очистка tmp")
+		u.removeOldFlow(nasIP)
+		m.Result()
+
+		return
+	case err != nil:
+		// flow не распознан (дрейф формата, сбой классификации по internal).
+		// файлы намеренно оставляем в tmp для следующего цикла и разбора
+		u.log.WithFields(lf).Warnln("flow не дал трафика и не распознан, файлы оставлены в tmp, ошибка", err)
 		return
 	}
 	m.Stop(parseFlowLogName)
@@ -234,7 +249,16 @@ func (u *AggregatorUsecase) Aggregate(
 	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
 	m.Start(siftTrafficLogName)
 	chunkList, err := u.Bridge.Traffic.SiftTraffic(channelMap, trafficMap, sessionList)
-	if err != nil {
+	switch {
+	case errors.Is(err, global.ErrNoData):
+		// просеивать нечего (например, пустой список сессий), но flow уже в tmp —
+		// убираем, чтобы файлы не накапливались и не перечитывались каждый цикл
+		u.log.WithFields(lf).Warnln("нет данных для просеивания трафика, очистка tmp")
+		u.removeOldFlow(nasIP)
+		m.Result()
+
+		return
+	case err != nil:
 		return
 	}
 	m.Stop(siftTrafficLogName)

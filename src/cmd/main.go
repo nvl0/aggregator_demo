@@ -38,7 +38,7 @@ func main() {
 
 	pgSessionManager := transaction.NewSQLSessionManager(pgDB)
 
-	ri := rimport.NewRepositoryImports(pgSessionManager)
+	ri := rimport.NewRepositoryImports(conf, pgSessionManager)
 
 	bi := bimport.NewEmptyBridge()
 
