@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.1.5
+          working-directory: src
+
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: aggregator
+          POSTGRES_PASSWORD: aggregator
+          POSTGRES_DB: aggregator
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aggregator"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 5
+
+    env:
+      CONF_PATH: ${{ github.workspace }}/src/config/conf.yaml
+      FLOW_DIR: ${{ github.workspace }}/src/flow
+      SUBNET_DISABLED_DIR: ${{ github.workspace }}/src/subnet-disabled
+      PG_URL: localhost:5432
+      DEBUG: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: Install golang-migrate
+        run: |
+          curl -fsSL https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
+            | tar xz migrate
+          sudo mv migrate /usr/local/bin/migrate
+
+      - name: Run migrations
+        run: >-
+          migrate -path docker/migrate
+          -database "postgres://aggregator:aggregator@localhost:5432/aggregator?sslmode=disable"
+          up
+
+      - name: Test
+        working-directory: src
+        run: go test -race -p 1 ./...
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          build-args: |
+            NAME=aggregator
+            VERSION=${{ github.sha }}
