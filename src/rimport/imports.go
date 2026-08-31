@@ -1,12 +1,13 @@
 package rimport
 
 import (
+	"log/slog"
+	"os"
+
 	"aggregator/src/config"
 	"aggregator/src/internal/repository/postgresql"
 	"aggregator/src/internal/repository/storage"
 	"aggregator/src/internal/transaction"
-	"log/slog"
-	"os"
 )
 
 // newFatalLogger локальный логгер для ошибок инициализации до появления основного логгера приложения

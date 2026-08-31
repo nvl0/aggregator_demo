@@ -1,6 +1,13 @@
 package usecase
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"runtime/debug"
+	"sync"
+
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
@@ -10,14 +17,15 @@ import (
 	"aggregator/src/tools/flowgen"
 	"aggregator/src/tools/measure"
 	"aggregator/src/tools/workerpool"
-	"context"
-	"errors"
-	"fmt"
-	"os"
-	"runtime/debug"
-	"sync"
 
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	// logFieldNasIP ключ поля nas_ip в структурных логах
+	logFieldNasIP = "nas_ip"
+	// loaderCount число стартовых загрузочных горутин: мапка каналов и мапка онлайн сессий
+	loaderCount = 2
 )
 
 type AggregatorUsecase struct {
@@ -76,7 +84,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 	sessChan := make(chan map[session.NasIP][]session.OnlineSession, 1)
 
 	var loaders sync.WaitGroup
-	loaders.Add(2)
+	loaders.Add(loaderCount)
 	// получение мапки каналов
 	go func() { defer loaders.Done(); u.loadChannelMap(chanChan) }()
 	// получение мапки сессий
@@ -117,7 +125,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		// то обработка директории будет отброшена
 		sessionList, exists := sessionMap[nasIP]
 		if !exists {
-			u.log.WithField("nas_ip", nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
+			u.log.WithField(logFieldNasIP, nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
 			continue
 		}
 
@@ -195,7 +203,7 @@ func (u *AggregatorUsecase) Aggregate(
 	m := measure.NewMeasure(writer)
 
 	lf := logrus.Fields{
-		"nas_ip": nasIP,
+		logFieldNasIP: nasIP,
 	}
 
 	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
@@ -291,7 +299,7 @@ func hasNewFile(fileNameList []string, committedFileNames map[string]bool) bool 
 // loadCommittedFileNames загрузка имен flow файлов, чанки которых уже закоммичены
 func (u *AggregatorUsecase) loadCommittedFileNames(nasIP string) (fileNameSet map[string]bool, err error) {
 	lf := logrus.Fields{
-		"nas_ip": nasIP,
+		logFieldNasIP: nasIP,
 	}
 
 	ts := u.SessionManager.CreateSession()
@@ -319,7 +327,7 @@ func (u *AggregatorUsecase) saveChunkListWithCheckpoint(
 	fileNameList []string,
 ) error {
 	lf := logrus.Fields{
-		"nas_ip": nasIP,
+		logFieldNasIP: nasIP,
 	}
 
 	ts := u.SessionManager.CreateSession()
@@ -352,7 +360,7 @@ func (u *AggregatorUsecase) saveChunkListWithCheckpoint(
 // именно они защищают от повторного подсчета этих файлов на следующем цикле
 func (u *AggregatorUsecase) removeOldFlow(nasIP string) {
 	lf := logrus.Fields{
-		"nas_ip": nasIP,
+		logFieldNasIP: nasIP,
 	}
 
 	if err := u.Repository.Flow.RemoveOld(nasIP); err != nil {

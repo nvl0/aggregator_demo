@@ -1,11 +1,12 @@
 package flowgen_test
 
 import (
-	"aggregator/src/tools/flowgen"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	"aggregator/src/tools/flowgen"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

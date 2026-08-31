@@ -1,10 +1,11 @@
 package rimport
 
 import (
+	"os"
+
 	"aggregator/src/config"
 	"aggregator/src/internal/repository"
 	"aggregator/src/internal/transaction"
-	"os"
 
 	"go.uber.org/mock/gomock"
 )

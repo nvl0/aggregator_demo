@@ -5,14 +5,6 @@
 package main
 
 import (
-	"aggregator/src/bimport"
-	"aggregator/src/config"
-	"aggregator/src/internal/transaction"
-	"aggregator/src/rimport"
-	"aggregator/src/tools/flowgen"
-	"aggregator/src/tools/logger"
-	"aggregator/src/tools/pgdb"
-	"aggregator/src/uimport"
 	"context"
 	"errors"
 	"flag"
@@ -22,6 +14,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"aggregator/src/bimport"
+	"aggregator/src/config"
+	"aggregator/src/internal/transaction"
+	"aggregator/src/rimport"
+	"aggregator/src/tools/flowgen"
+	"aggregator/src/tools/logger"
+	"aggregator/src/tools/pgdb"
+	"aggregator/src/uimport"
 
 	"github.com/jmoiron/sqlx"
 )

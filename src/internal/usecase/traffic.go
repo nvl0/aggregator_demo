@@ -1,6 +1,10 @@
 package usecase
 
 import (
+	"net"
+	"strconv"
+	"strings"
+
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/flow"
@@ -8,9 +12,6 @@ import (
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/rimport"
-	"net"
-	"strconv"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/yl2chen/cidranger"
@@ -77,80 +78,84 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		}
 
 		// ряд который содержит \t или \n не будет считан
-		if row != "" {
-			// определение аргументов в ряду
-			if rowArgs = strings.Split(row, ","); len(rowArgs) == flowRowFieldCount {
-				var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
+		if row == "" {
+			continue
+		}
 
-				lf := logrus.Fields{
-					"bytes":  bytes,
-					"src_ip": srcIP,
-					"dst_ip": dstIP,
-				}
+		// определение аргументов в ряду
+		if rowArgs = strings.Split(row, ","); len(rowArgs) != flowRowFieldCount {
+			continue
+		}
 
-				// парсинг аргументов
-				if record, err = u.parseRecord(bytes, srcIP, dstIP); err != nil {
-					u.log.WithFields(lf).Warnln(flow.ErrIncorrectRecord(err))
-					continue
-				}
+		var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
 
-				parsedRecords++
+		lf := logrus.Fields{
+			"bytes":  bytes,
+			"src_ip": srcIP,
+			"dst_ip": dstIP,
+		}
 
-				// определение принадлежности отправителя/получателя к сети.
-				// ошибку не логируем построчно (систематический сбой затопит лог) —
-				// копим счетчик и пишем один итог после цикла
-				isSrcInternal, containsErr = u.internalNet.Contains(record.SrcIP)
-				if containsErr == nil {
-					isDstInternal, containsErr = u.internalNet.Contains(record.DstIP)
-				}
-				if containsErr != nil {
-					classifyErrCount++
-					continue
-				}
+		// парсинг аргументов
+		if record, err = u.parseRecord(bytes, srcIP, dstIP); err != nil {
+			u.log.WithFields(lf).Warnln(flow.ErrIncorrectRecord(err))
+			continue
+		}
 
-				switch {
-				// получатель и отправитель внутри сети internal
-				case isSrcInternal && isDstInternal:
+		parsedRecords++
 
-					// запись получателю в download
-					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[record.SrcIPkey()],
-						traffic.NewTrafficDownload(record.ByteSize),
-						channelMap,
-						channel.Internal,
-					)
+		// определение принадлежности отправителя/получателя к сети.
+		// ошибку не логируем построчно (систематический сбой затопит лог) —
+		// копим счетчик и пишем один итог после цикла
+		isSrcInternal, containsErr = u.internalNet.Contains(record.SrcIP)
+		if containsErr == nil {
+			isDstInternal, containsErr = u.internalNet.Contains(record.DstIP)
+		}
+		if containsErr != nil {
+			classifyErrCount++
+			continue
+		}
 
-					// запись отправителю в upload
-					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[record.DstIPkey()],
-						traffic.NewTrafficUpload(record.ByteSize),
-						channelMap,
-						channel.Internal,
-					)
+		switch {
+		// получатель и отправитель внутри сети internal
+		case isSrcInternal && isDstInternal:
 
-				// получатель внутри сети internal
-				case isSrcInternal:
+			// запись получателю в download
+			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+				trafficMap[record.SrcIPkey()],
+				traffic.NewTrafficDownload(record.ByteSize),
+				channelMap,
+				channel.Internal,
+			)
 
-					// отправитель во внешней сети
-					trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[record.SrcIPkey()],
-						traffic.NewTrafficDownload(record.ByteSize),
-						channelMap,
-						channel.External,
-					)
+			// запись отправителю в upload
+			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+				trafficMap[record.DstIPkey()],
+				traffic.NewTrafficUpload(record.ByteSize),
+				channelMap,
+				channel.Internal,
+			)
 
-				// отправитель внутри сети internal
-				case isDstInternal:
+		// получатель внутри сети internal
+		case isSrcInternal:
 
-					// получатель во внешней сети
-					trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
-						trafficMap[record.DstIPkey()],
-						traffic.NewTrafficUpload(record.ByteSize),
-						channelMap,
-						channel.External,
-					)
-				}
-			}
+			// отправитель во внешней сети
+			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+				trafficMap[record.SrcIPkey()],
+				traffic.NewTrafficDownload(record.ByteSize),
+				channelMap,
+				channel.External,
+			)
+
+		// отправитель внутри сети internal
+		case isDstInternal:
+
+			// получатель во внешней сети
+			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+				trafficMap[record.DstIPkey()],
+				traffic.NewTrafficUpload(record.ByteSize),
+				channelMap,
+				channel.External,
+			)
 		}
 	}
 
@@ -248,7 +253,7 @@ func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ID]bool,
 	trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
 	lf := logrus.Fields{
-		"nas_ip": sessionList[0].NasIP,
+		logFieldNasIP: sessionList[0].NasIP,
 	}
 
 	chunkList = make([]session.Chunk, 0, len(sessionList))

@@ -1,12 +1,13 @@
 package workerpool_test
 
 import (
-	"aggregator/src/tools/workerpool"
 	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"aggregator/src/tools/workerpool"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

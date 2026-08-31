@@ -1,14 +1,15 @@
 package session_test
 
 import (
+	"os"
+	"testing"
+
 	"aggregator/src/config"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/repository/postgresql"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/tools/gensql"
 	"aggregator/src/tools/pgdb"
-	"os"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 )

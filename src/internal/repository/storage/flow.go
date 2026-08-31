@@ -1,12 +1,13 @@
 package storage
 
 import (
-	"aggregator/src/internal/entity/flow"
-	"aggregator/src/internal/entity/global"
-	"aggregator/src/internal/repository"
 	"fmt"
 	"os"
 	"strings"
+
+	"aggregator/src/internal/entity/flow"
+	"aggregator/src/internal/entity/global"
+	"aggregator/src/internal/repository"
 )
 
 type flowRepository struct {
