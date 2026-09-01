@@ -106,7 +106,7 @@ func TestPrepareFlow(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			data, fileNameList, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName, tt.args.skipFileNames)
 			r.Equal(tt.err, err)

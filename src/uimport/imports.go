@@ -11,6 +11,7 @@ import (
 	"aggregator/src/internal/usecase"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
+	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/subnetrange"
 
 	"github.com/sirupsen/logrus"
@@ -27,7 +28,13 @@ func NewUsecaseImports(
 	log *logrus.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
+	m *metrics.Metrics,
 ) UsecaseImports {
+	// метрики не переданы (тесты, loadgen): пишем в выброшенный реестр
+	if m == nil {
+		m = metrics.Nop()
+	}
+
 	// создание блока исключенных из подсчета адресов
 	internalNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
 		os.Getenv("SUBNET_DISABLED_DIR"), flow.InternalDisabled))
@@ -44,7 +51,7 @@ func NewUsecaseImports(
 			Session:    usecase.NewSessionUsecase(logger.NewUsecaseLogger(log, "session"), ri),
 			Channel:    usecase.NewChannelUsecase(logger.NewUsecaseLogger(log, "channel"), ri),
 			Traffic:    usecase.NewTrafficUsecase(logger.NewUsecaseLogger(log, "traffic"), ri, bi, internalNet),
-			Aggregator: usecase.NewAggregatorUsecase(logger.NewUsecaseLogger(log, "aggregator"), ri, bi),
+			Aggregator: usecase.NewAggregatorUsecase(logger.NewUsecaseLogger(log, "aggregator"), ri, bi, m),
 		},
 		BridgeImports: bi,
 	}

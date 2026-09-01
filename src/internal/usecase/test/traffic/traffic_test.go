@@ -488,7 +488,7 @@ also-broken,127.0.0.2,127.0.0.1`,
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			data, errParse := ui.Usecase.Traffic.ParseFlow(tt.args.channelMap, tt.args.flow)
 			r.Equal(tt.err, errParse)
@@ -588,7 +588,7 @@ func TestCountTraffic(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			data := ui.Usecase.Traffic.CountTraffic(tt.args.oldTraffic, tt.args.newTraffic,
 				tt.args.channelMap, tt.args.channelID)
@@ -700,7 +700,7 @@ func TestSiftTraffic(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			data, err := ui.Usecase.Traffic.SiftTraffic(tt.args.channelMap,
 				tt.args.trafficMap, tt.args.sessionList)

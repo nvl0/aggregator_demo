@@ -9,6 +9,7 @@ import (
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
+	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/ossignal"
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
@@ -49,7 +50,10 @@ func main() {
 
 	var wg sync.WaitGroup
 
+	m := metrics.New(log, version, pgDB.DB)
+
 	mux := http.NewServeMux()
+	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/healthz", health.Live)
 	mux.HandleFunc("/readyz", health.Ready(pgDB))
 
@@ -69,7 +73,7 @@ func main() {
 
 	bi := bimport.NewEmptyBridge()
 
-	ui := uimport.NewUsecaseImports(log, ri, bi)
+	ui := uimport.NewUsecaseImports(log, ri, bi, m)
 
 	bi.InitBridge(
 		ui.Usecase.Flow,
