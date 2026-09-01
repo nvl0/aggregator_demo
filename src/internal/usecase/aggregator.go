@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
@@ -16,6 +17,7 @@ import (
 	"aggregator/src/tools/dump"
 	"aggregator/src/tools/flowgen"
 	"aggregator/src/tools/measure"
+	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/workerpool"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +32,7 @@ const (
 
 type AggregatorUsecase struct {
 	measure measure.Measure
+	metrics *metrics.Metrics
 	log     *logrus.Logger
 	// poolSize размер пула воркеров агрегации
 	poolSize int
@@ -42,23 +45,36 @@ func NewAggregatorUsecase(
 	log *logrus.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
+	m *metrics.Metrics,
 ) *AggregatorUsecase {
 	writer := measure.NewLogrusWriter(log)
-	m := measure.NewMeasure(writer)
+	// msr, а не m: имя m занято метриками
+	msr := measure.NewMeasure(writer)
 
-	return &AggregatorUsecase{
-		measure:           m,
+	u := &AggregatorUsecase{
+		measure:           msr,
+		metrics:           m,
 		log:               log,
 		poolSize:          ri.Config.WorkerPoolSize(),
 		RepositoryImports: ri,
 		BridgeImports:     bi,
 	}
+
+	m.SetPoolSize(u.poolSize)
+
+	return u
 }
 
 var fgen = os.Getenv("FLOWGEN") == "true"
 
 // Start запуск агрегатора
 func (u *AggregatorUsecase) Start(ctx context.Context) {
+	cycleStart := time.Now()
+	cycleOK := false
+
+	u.metrics.SetCycleInProgress(true)
+	defer u.observeCycle(cycleStart, &cycleOK)
+
 	// генерация flow
 	if fgen {
 		if down, up, err := flowgen.Generate(flowgen.Params{
@@ -86,19 +102,39 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 	var loaders sync.WaitGroup
 	loaders.Add(loaderCount)
 	// получение мапки каналов
-	go func() { defer loaders.Done(); u.loadChannelMap(chanChan) }()
+	go func() {
+		defer loaders.Done()
+
+		phaseStart := time.Now()
+		u.loadChannelMap(chanChan)
+		u.metrics.ObservePhase(metrics.PhaseLoadChannels, time.Since(phaseStart))
+	}()
 	// получение мапки сессий
-	go func() { defer loaders.Done(); u.loadOnlineSessionMap(sessChan) }()
+	go func() {
+		defer loaders.Done()
+
+		phaseStart := time.Now()
+		u.loadOnlineSessionMap(sessChan)
+		u.metrics.ObservePhase(metrics.PhaseLoadSessions, time.Since(phaseStart))
+	}()
 
 	u.measure.Start("получение списка директорий")
+	dirsStart := time.Now()
 	dirList, err := u.Repository.Flow.ReadFlowDirNames()
+	// фаза пишется и на неуспехе
+	u.metrics.ObservePhase(metrics.PhaseReadDirs, time.Since(dirsStart))
+
 	if err != nil {
+		u.metrics.IncCycleError(metrics.CycleErrDirsRead)
 		u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
 		loaders.Wait() // не оставляем загрузочные горутины висеть
+
 		return
 	}
 	u.measure.Stop("получение списка директорий")
 	u.log.Debugf("количество директорий %d", len(dirList))
+
+	u.metrics.SetNASDiscovered(len(dirList))
 
 	channelMap := <-chanChan
 	sessionMap := <-sessChan
@@ -107,12 +143,17 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 	loaders.Wait()
 
 	if channelMap == nil || sessionMap == nil {
+		u.metrics.IncCycleError(metrics.CycleErrNilMaps)
+
 		return
 	}
+
+	cycleOK = true
 
 	u.measure.Result()
 
 	pool := workerpool.New(u.poolSize, workerpool.WithOnPanic(func(recovered any) {
+		u.metrics.IncWorkerPanic()
 		u.log.WithFields(logrus.Fields{
 			"recovered": recovered,
 			"stack":     string(debug.Stack()),
@@ -143,6 +184,21 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	// уже стартовавшие воркеры не прерываются на середине
 	pool.Wait()
+}
+
+// observeCycle фиксация метрик завершившегося цикла.
+// cycleOK передается указателем: значение выставляется уже после
+// того, как defer с вызовом этого метода объявлен
+func (u *AggregatorUsecase) observeCycle(start time.Time, cycleOK *bool) {
+	elapsed := time.Since(start)
+
+	u.metrics.ObserveCycle(elapsed)
+	u.metrics.SetLastCycleDuration(elapsed)
+	u.metrics.SetCycleInProgress(false)
+
+	if *cycleOK {
+		u.metrics.SetLastSuccess()
+	}
 }
 
 // loadChannelMap загрузка каналов
@@ -211,16 +267,24 @@ func (u *AggregatorUsecase) Aggregate(
 	// имена flow файлов, чанки которых уже закоммичены в одном из предыдущих циклов
 	committedFileNames, err := u.loadCommittedFileNames(nasIP)
 	if err != nil {
+		u.nasFailed(metrics.NASStageCheckpoint)
+
 		return
 	}
 
 	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	flow, fileNameList, err := u.Bridge.Flow.PrepareFlow(nasIP, committedFileNames)
+	// prepareFlow фиксирует длительность фазы, в том числе на ошибке
+	flow, fileNameList, err := u.prepareFlow(nasIP, committedFileNames)
 	if err != nil {
+		u.nasFailed(metrics.NASStagePrepare)
+
 		return
 	}
 	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
 	u.log.WithFields(lf).Debugf("размер flow %d", len([]rune(flow)))
+
+	// метрика берет длину в байтах, а не в рунах
+	u.metrics.ObserveFlowSize(len(flow))
 
 	// весь tmp состоит из уже закоммиченных файлов: предыдущий цикл упал
 	// между коммитом чанков и очисткой tmp. Считать нечего, нужно лишь завершить очистку
@@ -229,12 +293,17 @@ func (u *AggregatorUsecase) Aggregate(
 		u.removeOldFlow(nasIP)
 		m.Result()
 
+		u.metrics.IncNAS(metrics.NASResultNoNew)
+
 		return
 	}
 
 	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
 	m.Start(parseFlowLogName)
+	parseStart := time.Now()
 	trafficMap, err := u.Bridge.Traffic.ParseFlow(channelMap, flow)
+	u.metrics.ObserveNASPhase(metrics.NASPhaseParseFlow, time.Since(parseStart))
+
 	switch {
 	case errors.Is(err, global.ErrNoData):
 		// flow распарсен, но учитываемого (internal) трафика в нем нет — только external.
@@ -244,11 +313,16 @@ func (u *AggregatorUsecase) Aggregate(
 		u.removeOldFlow(nasIP)
 		m.Result()
 
+		u.metrics.IncNAS(metrics.NASResultNoInternal)
+
 		return
 	case err != nil:
 		// flow не распознан (дрейф формата, сбой классификации по internal).
 		// файлы намеренно оставляем в tmp для следующего цикла и разбора
 		u.log.WithFields(lf).Warnln("flow не дал трафика и не распознан, файлы оставлены в tmp, ошибка", err)
+		u.metrics.IncNASError(metrics.NASStageParse)
+		u.metrics.IncNAS(metrics.NASResultUnrecognized)
+
 		return
 	}
 	m.Stop(parseFlowLogName)
@@ -256,7 +330,10 @@ func (u *AggregatorUsecase) Aggregate(
 
 	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
 	m.Start(siftTrafficLogName)
+	siftStart := time.Now()
 	chunkList, err := u.Bridge.Traffic.SiftTraffic(channelMap, trafficMap, sessionList)
+	u.metrics.ObserveNASPhase(metrics.NASPhaseSiftTraffic, time.Since(siftStart))
+
 	switch {
 	case errors.Is(err, global.ErrNoData):
 		// просеивать нечего (например, пустой список сессий), но flow уже в tmp —
@@ -265,24 +342,83 @@ func (u *AggregatorUsecase) Aggregate(
 		u.removeOldFlow(nasIP)
 		m.Result()
 
+		u.nasFailed(metrics.NASStageSift)
+
 		return
 	case err != nil:
+		u.nasFailed(metrics.NASStageSift)
+
 		return
 	}
 	m.Stop(siftTrafficLogName)
 	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
 	u.log.Debugln("актуальный результат", dump.Struct(chunkList))
 
+	u.accountTraffic(chunkList)
+
 	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков и чекпоинта в бд", nasIP)
 	m.Start(saveChunkListLogName)
-	if err = u.saveChunkListWithCheckpoint(nasIP, chunkList, fileNameList); err != nil {
+
+	if err = u.commitChunks(nasIP, chunkList, fileNameList); err != nil {
 		return
 	}
 	m.Stop(saveChunkListLogName)
 
+	u.metrics.AddChunksSaved(len(chunkList))
+	u.metrics.IncNAS(metrics.NASResultOK)
+
 	u.removeOldFlow(nasIP)
 
 	m.Result()
+}
+
+// nasFailed фиксация неуспешной обработки nas_ip на этапе stage
+func (u *AggregatorUsecase) nasFailed(stage metrics.NASStage) {
+	u.metrics.IncNASError(stage)
+	u.metrics.IncNAS(metrics.NASResultError)
+}
+
+// prepareFlow подготовка flow с фиксацией длительности фазы.
+// фаза пишется и на ошибке
+func (u *AggregatorUsecase) prepareFlow(
+	nasIP string,
+	committedFileNames map[string]bool,
+) (flow string, fileNameList []string, err error) {
+	start := time.Now()
+	flow, fileNameList, err = u.Bridge.Flow.PrepareFlow(nasIP, committedFileNames)
+	u.metrics.ObserveNASPhase(metrics.NASPhasePrepareFlow, time.Since(start))
+
+	return flow, fileNameList, err
+}
+
+// commitChunks сохранение чанков с фиксацией метрик этапа
+func (u *AggregatorUsecase) commitChunks(
+	nasIP string,
+	chunkList []session.Chunk,
+	fileNameList []string,
+) error {
+	start := time.Now()
+	err := u.saveChunkListWithCheckpoint(nasIP, chunkList, fileNameList)
+	u.metrics.ObserveNASPhase(metrics.NASPhaseSaveChunks, time.Since(start))
+
+	if err != nil {
+		u.nasFailed(metrics.NASStageSave)
+	}
+
+	return err
+}
+
+// accountTraffic учет объема трафика по чанкам, готовым к сохранению
+func (u *AggregatorUsecase) accountTraffic(chunkList []session.Chunk) {
+	var download, upload int
+
+	for _, chunk := range chunkList {
+		download += chunk.Download
+		upload += chunk.Upload
+	}
+
+	u.metrics.AddAccountedTraffic(metrics.DirectionDownload, download)
+	u.metrics.AddAccountedTraffic(metrics.DirectionUpload, upload)
 }
 
 // hasNewFile проверка, что среди файлов есть хотя бы один незакоммиченный

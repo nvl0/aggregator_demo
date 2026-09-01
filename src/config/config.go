@@ -11,6 +11,10 @@ import (
 // defaultWorkerPoolSize размер пула воркеров агрегации по умолчанию
 const defaultWorkerPoolSize = 10
 
+// defaultMetricsAddr адрес служебного http сервера по умолчанию.
+// :9090 занят самим prometheus, :2112 — конвенция client_golang
+const defaultMetricsAddr = ":2112"
+
 // Config конфиг
 type Config struct {
 	Postgres struct {
@@ -54,4 +58,14 @@ func (c *Config) WorkerPoolSize() int {
 	}
 
 	return c.WorkerPool.Size
+}
+
+// MetricsAddr адрес служебного http сервера метрик и health-проб.
+// Задается только переменной окружения METRICS_ADDR, в conf.yaml ключа нет
+func (c *Config) MetricsAddr() string {
+	if addr := os.Getenv("METRICS_ADDR"); addr != "" {
+		return addr
+	}
+
+	return defaultMetricsAddr
 }

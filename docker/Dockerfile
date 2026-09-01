@@ -33,6 +33,9 @@ ENV CONF_PATH "conf.yaml"
 ENV FLOW_DIR "flow"
 ENV SUBNET_DISABLED_DIR "subnet-disabled"
 
+# служебный http сервер: метрики и health-пробы
+EXPOSE 2112
+
 COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /app/${NAME}
 
 WORKDIR /app

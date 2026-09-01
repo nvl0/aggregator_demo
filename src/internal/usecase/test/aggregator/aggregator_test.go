@@ -3,6 +3,9 @@ package aggregator_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"aggregator/src/bimport"
@@ -13,6 +16,7 @@ import (
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
+	"aggregator/src/tools/metrics"
 	"aggregator/src/uimport"
 
 	"go.uber.org/mock/gomock"
@@ -165,7 +169,7 @@ func TestStart(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			ui.Usecase.Aggregator.Start(tt.args.ctx)
 		})
@@ -482,9 +486,163 @@ func TestAggregate(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports())
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
 			ui.Usecase.Aggregator.Aggregate(tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
+		})
+	}
+}
+
+// scrapeMetrics снимает состояние метрик через http-хендлер
+func scrapeMetrics(t *testing.T, m *metrics.Metrics) string {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	m.Handler().ServeHTTP(rec, req)
+
+	return rec.Body.String()
+}
+
+// requireMetricLine проверяет наличие строки среди снятых серий
+func requireMetricLine(t *testing.T, body, want string) {
+	t.Helper()
+
+	for _, line := range strings.Split(body, "\n") {
+		if strings.TrimSpace(line) == want {
+			return
+		}
+	}
+
+	t.Errorf("в выводе метрик нет строки %q", want)
+}
+
+func TestAggregateMetrics(t *testing.T) {
+	type fields struct {
+		ri rimport.TestRepositoryImports
+		bi *bimport.TestBridgeImports
+		ts *transaction.MockSession
+	}
+
+	const (
+		nasIP   = "127.0.0.0"
+		ip1     = "127.0.0.1"
+		sessID  = 1
+		newFile = "ft-01.01.2026-00:05:00"
+	)
+
+	flowStr := "132,127.0.0.1,127.0.0.2"
+
+	channelMap := map[channel.ID]bool{
+		channel.Internal: true,
+		channel.External: false,
+	}
+	trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
+		ip1: {
+			channel.Internal: {Download: 366, Upload: 801},
+		},
+	}
+	sessionList := []session.OnlineSession{
+		{SessID: sessID, NasIP: nasIP, IP: ip1},
+	}
+	chunkList := []session.Chunk{
+		{SessID: sessID, ChannelID: int(channel.Internal), Download: 64, Upload: 2},
+	}
+
+	tests := []struct {
+		name    string
+		prepare func(f *fields)
+		want    []string
+	}{
+		{
+			name: "успешный путь пишет ok, чанки и трафик",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
+				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Rollback().Return(nil).Times(3)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ts.EXPECT().Commit().Return(nil),
+				)
+			},
+			want: []string{
+				`aggregator_nas_processed_total{result="ok"} 1`,
+				`aggregator_chunks_saved_total 1`,
+				`aggregator_accounted_traffic_bytes_total{direction="download"} 64`,
+				`aggregator_accounted_traffic_bytes_total{direction="upload"} 2`,
+				`aggregator_nas_phase_duration_seconds_count{phase="prepare_flow"} 1`,
+				`aggregator_nas_phase_duration_seconds_count{phase="save_chunks"} 1`,
+				`aggregator_flow_size_bytes_count 1`,
+			},
+		},
+		{
+			name: "нераспознанный flow пишет unrecognized и ошибку этапа parse",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+				fileNameList := []string{newFile}
+
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
+				f.ts.EXPECT().Start().Return(nil).Times(1)
+				f.ts.EXPECT().Rollback().Return(nil).Times(1)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+					f.bi.TestBridge.Flow.EXPECT().
+						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
+					f.bi.TestBridge.Traffic.EXPECT().
+						ParseFlow(channelMap, flowStr).Return(nil, global.ErrInternalError),
+				)
+			},
+			want: []string{
+				`aggregator_nas_processed_total{result="unrecognized"} 1`,
+				`aggregator_nas_errors_total{stage="parse"} 1`,
+				`aggregator_nas_processed_total{result="ok"} 0`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			f := fields{
+				ri: rimport.NewTestRepositoryImports(ctrl),
+				ts: transaction.NewMockSession(ctrl),
+				bi: bimport.NewTestBridgeImports(ctrl),
+			}
+			tt.prepare(&f)
+
+			m := metrics.New(testLogger, "test", nil)
+
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), m)
+
+			ui.Usecase.Aggregator.Aggregate(nasIP, sessionList, channelMap)
+
+			body := scrapeMetrics(t, m)
+
+			for _, want := range tt.want {
+				requireMetricLine(t, body, want)
+			}
 		})
 	}
 }

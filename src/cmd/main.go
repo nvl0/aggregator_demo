@@ -4,14 +4,20 @@ import (
 	"aggregator/src/bimport"
 	"aggregator/src/config"
 	"aggregator/src/external"
+	"aggregator/src/external/health"
+	"aggregator/src/external/httpsrv"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
+	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/ossignal"
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
 
+	"context"
+	"net/http"
 	"os"
+	"sync"
 )
 
 var (
@@ -20,7 +26,8 @@ var (
 )
 
 // dbConnReserve резерв соединений с бд под параллельные стартовые запросы
-const dbConnReserve = 2
+// и пробу готовности /readyz, которая ходит в бд во время цикла агрегации
+const dbConnReserve = 3
 
 func main() {
 	log := logger.NewFileLogger(module)
@@ -36,13 +43,37 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// ctx гасит только служебный http сервер: прерывание идущего цикла
+	// агрегации в скоуп 2a не входит
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	m := metrics.New(log, version, pgDB.DB)
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", m.Handler())
+	mux.HandleFunc("/healthz", health.Live)
+	mux.HandleFunc("/readyz", health.Ready(pgDB))
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		if srvErr := httpsrv.Run(ctx, log, conf.MetricsAddr(), mux); srvErr != nil {
+			log.Errorln("служебный http сервер остановлен с ошибкой", srvErr)
+		}
+	}()
+
 	pgSessionManager := transaction.NewSQLSessionManager(pgDB)
 
 	ri := rimport.NewRepositoryImports(conf, pgSessionManager)
 
 	bi := bimport.NewEmptyBridge()
 
-	ui := uimport.NewUsecaseImports(log, ri, bi)
+	ui := uimport.NewUsecaseImports(log, ri, bi, m)
 
 	bi.InitBridge(
 		ui.Usecase.Flow,
@@ -55,5 +86,16 @@ func main() {
 	flagTerm := make(chan struct{})
 	go ossignal.WaitForTerm(flagTerm)
 
+	// flagTerm закрывается в ossignal.WaitForTerm, close будит всех читателей
+	go func() {
+		<-flagTerm
+		cancel()
+	}()
+
 	external.NewCron(log, ui).Run(flagTerm)
+
+	// Run мог выйти не по сигналу, поэтому гасим сервер явно
+	cancel()
+	// даем httpsrv.Shutdown доработать
+	wg.Wait()
 }
