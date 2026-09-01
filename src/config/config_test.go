@@ -35,3 +35,34 @@ func TestWorkerPoolSize(t *testing.T) {
 		})
 	}
 }
+
+// TestMetricsAddr адрес служебного http сервера берется из env, иначе дефолт
+func TestMetricsAddr(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want string
+	}{
+		{
+			name: "env пуст, берется дефолт",
+			env:  "",
+			want: ":2112",
+		},
+		{
+			name: "env переопределяет дефолт",
+			env:  "127.0.0.1:19999",
+			want: "127.0.0.1:19999",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("METRICS_ADDR", tt.env)
+
+			c := config.Config{}
+			if got := c.MetricsAddr(); got != tt.want {
+				t.Errorf("MetricsAddr() = %q, ожидалось %q", got, tt.want)
+			}
+		})
+	}
+}
