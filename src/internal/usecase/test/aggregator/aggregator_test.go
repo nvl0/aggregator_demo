@@ -1,6 +1,10 @@
 package aggregator_test
 
 import (
+	"context"
+	"errors"
+	"testing"
+
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
@@ -10,9 +14,6 @@ import (
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
-	"context"
-	"errors"
-	"testing"
 
 	"go.uber.org/mock/gomock"
 )

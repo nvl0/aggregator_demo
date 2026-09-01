@@ -1,9 +1,10 @@
 package usecase
 
 import (
+	"errors"
+
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
-	"errors"
 
 	"strings"
 

@@ -1,11 +1,12 @@
 package usecase
 
 import (
+	"errors"
+
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
-	"errors"
 
 	"github.com/sirupsen/logrus"
 )

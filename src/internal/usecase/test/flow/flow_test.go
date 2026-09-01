@@ -1,12 +1,13 @@
 package flow_test
 
 import (
+	"testing"
+
 	"aggregator/src/bimport"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"

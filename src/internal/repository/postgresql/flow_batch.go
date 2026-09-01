@@ -1,11 +1,12 @@
 package postgresql
 
 import (
+	"errors"
+
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/repository"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/tools/gensql"
-	"errors"
 
 	"github.com/jmoiron/sqlx"
 )

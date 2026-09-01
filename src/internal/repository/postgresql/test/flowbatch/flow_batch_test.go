@@ -1,12 +1,13 @@
 package flowbatch_test
 
 import (
+	"os"
+	"testing"
+
 	"aggregator/src/config"
 	"aggregator/src/internal/repository/postgresql"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/tools/pgdb"
-	"os"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 )

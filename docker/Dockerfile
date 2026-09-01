@@ -1,4 +1,4 @@
-FROM golang:1.26.5 AS build-env
+FROM golang:1.27.0 AS build-env
 ARG NAME
 ENV BASE_PATH "/go/src/${NAME}"
 
@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=${NAME},target=/go/pkg/mod \
 cd cmd && \
 go build -o ${NAME} .
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 ARG NAME
 ENV BASE_PATH "/go/src/${NAME}"
 

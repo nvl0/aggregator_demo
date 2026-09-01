@@ -1,10 +1,11 @@
 package external
 
 import (
-	"aggregator/src/internal/entity/global"
-	"aggregator/src/uimport"
 	"context"
 	"time"
+
+	"aggregator/src/internal/entity/global"
+	"aggregator/src/uimport"
 
 	"github.com/sirupsen/logrus"
 )

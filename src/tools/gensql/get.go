@@ -1,9 +1,10 @@
 package gensql
 
 import (
-	"aggregator/src/internal/entity/global"
 	"database/sql"
 	"errors"
+
+	"aggregator/src/internal/entity/global"
 
 	"github.com/jmoiron/sqlx"
 )

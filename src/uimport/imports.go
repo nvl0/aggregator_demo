@@ -1,6 +1,9 @@
 package uimport
 
 import (
+	"fmt"
+	"os"
+
 	"aggregator/src/bimport"
 	"aggregator/src/config"
 	"aggregator/src/internal/entity/flow"
@@ -9,8 +12,6 @@ import (
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/subnetrange"
-	"fmt"
-	"os"
 
 	"github.com/sirupsen/logrus"
 )

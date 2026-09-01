@@ -1,6 +1,9 @@
 package traffic_test
 
 import (
+	"net"
+	"testing"
+
 	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
@@ -10,8 +13,6 @@ import (
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/uimport"
-	"net"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yl2chen/cidranger"

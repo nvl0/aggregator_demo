@@ -1,6 +1,6 @@
 module aggregator/src
 
-go 1.26
+go 1.27
 
 require (
 	github.com/davecgh/go-spew v1.1.1

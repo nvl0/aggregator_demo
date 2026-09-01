@@ -1,8 +1,9 @@
 package config_test
 
 import (
-	"aggregator/src/config"
 	"testing"
+
+	"aggregator/src/config"
 )
 
 // TestWorkerPoolSize размер пула берется из conf.yaml и переопределяется env
