@@ -10,3 +10,4 @@ docker/docker-compose.override.yaml
 docs/superpowers
 .superpowers
 .idea/
+.worktrees/
