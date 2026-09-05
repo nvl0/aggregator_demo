@@ -20,7 +20,6 @@ import (
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/flowgen"
-	"aggregator/src/tools/logger"
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
 
@@ -47,7 +46,7 @@ const (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	if err := run(log); err != nil {
-		log.Error(err.Error())
+		log.Error("запуск loadgen завершился с ошибкой", "error", err)
 		os.Exit(1)
 	}
 }
@@ -105,7 +104,7 @@ func run(log *slog.Logger) error {
 
 	if *runCycleF {
 		var elapsed time.Duration
-		if elapsed, err = runCycle(conf); err != nil {
+		if elapsed, err = runCycle(conf, log); err != nil {
 			return fmt.Errorf("не удалось выполнить цикл агрегации: %w", err)
 		}
 		log.Info("цикл агрегации завершен", "n", *n, "pool", conf.WorkerPoolSize(), "elapsed", elapsed.String())
@@ -189,9 +188,7 @@ func cleanupLoad(db *sqlx.DB, flowDir string) (err error) {
 
 // runCycle собирает зависимости как в src/cmd/main.go
 // и выполняет один цикл агрегации с замером времени
-func runCycle(conf config.Config) (elapsed time.Duration, err error) {
-	log := logger.NewNoFileLogger("loadgen")
-
+func runCycle(conf config.Config, log *slog.Logger) (elapsed time.Duration, err error) {
 	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+dbConnReserve)
 	defer pgDB.Close()
 

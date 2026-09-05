@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	testLogger = logger.NewNoFileLogger("test")
+	testLogger = logger.NewDiscard()
 )
 
 func TestStart(t *testing.T) {

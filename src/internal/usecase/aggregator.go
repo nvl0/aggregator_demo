@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/debug"
 	"sync"
@@ -19,8 +20,6 @@ import (
 	"aggregator/src/tools/measure"
 	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/workerpool"
-
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -33,7 +32,7 @@ const (
 type AggregatorUsecase struct {
 	measure measure.Measure
 	metrics *metrics.Metrics
-	log     *logrus.Logger
+	log     *slog.Logger
 	// poolSize размер пула воркеров агрегации
 	poolSize int
 	//
@@ -42,12 +41,12 @@ type AggregatorUsecase struct {
 }
 
 func NewAggregatorUsecase(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
 	m *metrics.Metrics,
 ) *AggregatorUsecase {
-	writer := measure.NewLogrusWriter(log)
+	writer := measure.NewSlogWriter(log)
 	// msr, а не m: имя m занято метриками
 	msr := measure.NewMeasure(writer)
 
@@ -88,9 +87,9 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 				Download:  down,
 				Upload:    up,
 			}
-			u.log.Debugln("ожидаемый результат", dump.Struct(expectedChunk))
+			u.log.DebugContext(ctx, "ожидаемый результат", "dump", dump.Struct(expectedChunk))
 		} else {
-			u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
+			u.log.DebugContext(ctx, "не удалось загрузить список nas_ip директорий, ошибка", "error", err)
 		}
 	}
 
@@ -126,13 +125,13 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	if err != nil {
 		u.metrics.IncCycleError(metrics.CycleErrDirsRead)
-		u.log.Debugln("не удалось загрузить список nas_ip директорий, ошибка", err)
+		u.log.DebugContext(ctx, "не удалось загрузить список nas_ip директорий, ошибка", "error", err)
 		loaders.Wait() // не оставляем загрузочные горутины висеть
 
 		return
 	}
 	u.measure.Stop("получение списка директорий")
-	u.log.Debugf("количество директорий %d", len(dirList))
+	u.log.DebugContext(ctx, "количество директорий", "count", len(dirList))
 
 	u.metrics.SetNASDiscovered(len(dirList))
 
@@ -154,10 +153,8 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 
 	pool := workerpool.New(u.poolSize, workerpool.WithOnPanic(func(recovered any) {
 		u.metrics.IncWorkerPanic()
-		u.log.WithFields(logrus.Fields{
-			"recovered": recovered,
-			"stack":     string(debug.Stack()),
-		}).Errorln("паника воркера агрегации, обработка nas_ip прервана")
+		u.log.ErrorContext(ctx, "паника воркера агрегации, обработка nas_ip прервана",
+			"recovered", recovered, "stack", string(debug.Stack()))
 	}))
 
 	// название директории совпадает с session.NasIP
@@ -166,7 +163,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		// то обработка директории будет отброшена
 		sessionList, exists := sessionMap[nasIP]
 		if !exists {
-			u.log.WithField(logFieldNasIP, nasIP).Debugf("nas_ip %s отсутствует в бд", nasIP)
+			u.log.DebugContext(ctx, "nas_ip отсутствует в бд", logFieldNasIP, nasIP)
 			continue
 		}
 
@@ -177,7 +174,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		if !pool.Go(ctx, func() {
 			u.Bridge.Aggregator.Aggregate(nasIP, sessionList, channelMap)
 		}) {
-			u.log.Debugln("контекст отменен, рассылка оставшихся nas_ip прекращена")
+			u.log.DebugContext(ctx, "контекст отменен, рассылка оставшихся nas_ip прекращена")
 			break
 		}
 	}
@@ -207,7 +204,7 @@ func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ID]bool) 
 
 	ts := u.SessionManager.CreateSession()
 	if err := ts.Start(); err != nil {
-		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		u.log.Error("не удалось открыть транзакцию, ошибка", "error", err)
 		return
 	}
 	defer func() { _ = ts.Rollback() }()
@@ -218,7 +215,7 @@ func (u *AggregatorUsecase) loadChannelMap(chanChan chan<- map[channel.ID]bool) 
 
 	channelMap, err := u.Bridge.Channel.LoadChannelMap(ts)
 	if err != nil {
-		u.log.Errorln("не удалось загрузить мапку каналов, ошибка", err)
+		u.log.Error("не удалось загрузить мапку каналов, ошибка", "error", err)
 		return
 	}
 
@@ -231,7 +228,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 
 	ts := u.SessionManager.CreateSession()
 	if err := ts.Start(); err != nil {
-		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		u.log.Error("не удалось открыть транзакцию, ошибка", "error", err)
 		return
 	}
 	defer func() { _ = ts.Rollback() }()
@@ -242,7 +239,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(sessChan chan<- map[session.Nas
 
 	sessionMap, err := u.Bridge.Session.LoadOnlineSessionMap(ts)
 	if err != nil {
-		u.log.Errorln("не удалось загрузить мапку онлайн сессий, ошибка", err)
+		u.log.Error("не удалось загрузить мапку онлайн сессий, ошибка", "error", err)
 		return
 	}
 
@@ -255,14 +252,10 @@ func (u *AggregatorUsecase) Aggregate(
 	sessionList []session.OnlineSession,
 	channelMap map[channel.ID]bool,
 ) {
-	writer := measure.NewLogrusWriter(u.log)
+	writer := measure.NewSlogWriter(u.log)
 	m := measure.NewMeasure(writer)
 
-	lf := logrus.Fields{
-		logFieldNasIP: nasIP,
-	}
-
-	u.log.WithFields(lf).Debugf("количество сессий онлайн %d", len(sessionList))
+	u.log.Debug("количество сессий онлайн", "count", len(sessionList), logFieldNasIP, nasIP)
 
 	// имена flow файлов, чанки которых уже закоммичены в одном из предыдущих циклов
 	committedFileNames, err := u.loadCommittedFileNames(nasIP)
@@ -281,7 +274,7 @@ func (u *AggregatorUsecase) Aggregate(
 		return
 	}
 	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
-	u.log.WithFields(lf).Debugf("размер flow %d", len([]rune(flow)))
+	u.log.Debug("размер flow", "size", len([]rune(flow)), logFieldNasIP, nasIP)
 
 	// метрика берет длину в байтах, а не в рунах
 	u.metrics.ObserveFlowSize(len(flow))
@@ -289,7 +282,7 @@ func (u *AggregatorUsecase) Aggregate(
 	// весь tmp состоит из уже закоммиченных файлов: предыдущий цикл упал
 	// между коммитом чанков и очисткой tmp. Считать нечего, нужно лишь завершить очистку
 	if !hasNewFile(fileNameList, committedFileNames) {
-		u.log.WithFields(lf).Debugln("новых flow файлов нет, повторная очистка tmp")
+		u.log.Debug("новых flow файлов нет, повторная очистка tmp", logFieldNasIP, nasIP)
 		u.removeOldFlow(nasIP)
 		m.Result()
 
@@ -309,7 +302,7 @@ func (u *AggregatorUsecase) Aggregate(
 		// flow распарсен, но учитываемого (internal) трафика в нем нет — только external.
 		// считать нечего, файлы нужно убрать из tmp, иначе они копятся
 		// и перечитываются на каждом цикле
-		u.log.WithFields(lf).Warnln("во flow нет internal трафика, очистка tmp")
+		u.log.Warn("во flow нет internal трафика, очистка tmp", logFieldNasIP, nasIP)
 		u.removeOldFlow(nasIP)
 		m.Result()
 
@@ -319,14 +312,15 @@ func (u *AggregatorUsecase) Aggregate(
 	case err != nil:
 		// flow не распознан (дрейф формата, сбой классификации по internal).
 		// файлы намеренно оставляем в tmp для следующего цикла и разбора
-		u.log.WithFields(lf).Warnln("flow не дал трафика и не распознан, файлы оставлены в tmp, ошибка", err)
+		u.log.Warn("flow не дал трафика и не распознан, файлы оставлены в tmp, ошибка",
+			"error", err, logFieldNasIP, nasIP)
 		u.metrics.IncNASError(metrics.NASStageParse)
 		u.metrics.IncNAS(metrics.NASResultUnrecognized)
 
 		return
 	}
 	m.Stop(parseFlowLogName)
-	u.log.WithFields(lf).Debugf("количество трафика %d", len(trafficMap))
+	u.log.Debug("количество трафика", "count", len(trafficMap), logFieldNasIP, nasIP)
 
 	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
 	m.Start(siftTrafficLogName)
@@ -338,7 +332,7 @@ func (u *AggregatorUsecase) Aggregate(
 	case errors.Is(err, global.ErrNoData):
 		// просеивать нечего (например, пустой список сессий), но flow уже в tmp —
 		// убираем, чтобы файлы не накапливались и не перечитывались каждый цикл
-		u.log.WithFields(lf).Warnln("нет данных для просеивания трафика, очистка tmp")
+		u.log.Warn("нет данных для просеивания трафика, очистка tmp", logFieldNasIP, nasIP)
 		u.removeOldFlow(nasIP)
 		m.Result()
 
@@ -351,8 +345,8 @@ func (u *AggregatorUsecase) Aggregate(
 		return
 	}
 	m.Stop(siftTrafficLogName)
-	u.log.WithFields(lf).Debugf("количество чанков %d", len(chunkList))
-	u.log.Debugln("актуальный результат", dump.Struct(chunkList))
+	u.log.Debug("количество чанков", "count", len(chunkList), logFieldNasIP, nasIP)
+	u.log.Debug("актуальный результат", "dump", dump.Struct(chunkList))
 
 	u.accountTraffic(chunkList)
 
@@ -434,19 +428,15 @@ func hasNewFile(fileNameList []string, committedFileNames map[string]bool) bool 
 
 // loadCommittedFileNames загрузка имен flow файлов, чанки которых уже закоммичены
 func (u *AggregatorUsecase) loadCommittedFileNames(nasIP string) (fileNameSet map[string]bool, err error) {
-	lf := logrus.Fields{
-		logFieldNasIP: nasIP,
-	}
-
 	ts := u.SessionManager.CreateSession()
 	if err = ts.Start(); err != nil {
-		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		u.log.Error("не удалось открыть транзакцию, ошибка", "error", err)
 		return fileNameSet, err
 	}
 	defer func() { _ = ts.Rollback() }()
 
 	if fileNameSet, err = u.Repository.FlowBatch.LoadCommittedFileNames(ts, nasIP); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось загрузить чекпоинт flow файлов, ошибка", err)
+		u.log.Error("не удалось загрузить чекпоинт flow файлов, ошибка", "error", err, logFieldNasIP, nasIP)
 		return fileNameSet, err
 	}
 
@@ -462,29 +452,25 @@ func (u *AggregatorUsecase) saveChunkListWithCheckpoint(
 	chunkList []session.Chunk,
 	fileNameList []string,
 ) error {
-	lf := logrus.Fields{
-		logFieldNasIP: nasIP,
-	}
-
 	ts := u.SessionManager.CreateSession()
 	if err := ts.Start(); err != nil {
-		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		u.log.Error("не удалось открыть транзакцию, ошибка", "error", err)
 		return err
 	}
 	defer func() { _ = ts.Rollback() }()
 
 	if err := u.Repository.Session.SaveChunkList(ts, chunkList); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось сохранить чанки, ошибка", err)
+		u.log.Error("не удалось сохранить чанки, ошибка", "error", err, logFieldNasIP, nasIP)
 		return err
 	}
 
 	if err := u.Repository.FlowBatch.SaveFileNames(ts, nasIP, fileNameList); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось сохранить чекпоинт flow файлов, ошибка", err)
+		u.log.Error("не удалось сохранить чекпоинт flow файлов, ошибка", "error", err, logFieldNasIP, nasIP)
 		return err
 	}
 
 	if err := ts.Commit(); err != nil {
-		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
+		u.log.Error("не удалось закрыть транзакцию, ошибка", "error", err)
 		return err
 	}
 
@@ -495,28 +481,24 @@ func (u *AggregatorUsecase) saveChunkListWithCheckpoint(
 // Если удалить файлы не удалось, записи чекпоинта намеренно остаются в бд:
 // именно они защищают от повторного подсчета этих файлов на следующем цикле
 func (u *AggregatorUsecase) removeOldFlow(nasIP string) {
-	lf := logrus.Fields{
-		logFieldNasIP: nasIP,
-	}
-
 	if err := u.Repository.Flow.RemoveOld(nasIP); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось удалить старый flow, ошибка", err)
+		u.log.Error("не удалось удалить старый flow, ошибка", "error", err, logFieldNasIP, nasIP)
 		return
 	}
 
 	ts := u.SessionManager.CreateSession()
 	if err := ts.Start(); err != nil {
-		u.log.Errorln("не удалось открыть транзакцию, ошибка", err)
+		u.log.Error("не удалось открыть транзакцию, ошибка", "error", err)
 		return
 	}
 	defer func() { _ = ts.Rollback() }()
 
 	if err := u.Repository.FlowBatch.RemoveByNasIP(ts, nasIP); err != nil {
-		u.log.WithFields(lf).Errorln("не удалось удалить чекпоинт flow файлов, ошибка", err)
+		u.log.Error("не удалось удалить чекпоинт flow файлов, ошибка", "error", err, logFieldNasIP, nasIP)
 		return
 	}
 
 	if err := ts.Commit(); err != nil {
-		u.log.Errorln("не удалось закрыть транзакцию, ошибка", err)
+		u.log.Error("не удалось закрыть транзакцию, ошибка", "error", err)
 	}
 }

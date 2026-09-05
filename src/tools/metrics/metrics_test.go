@@ -11,7 +11,7 @@ import (
 	"aggregator/src/tools/metrics"
 )
 
-var testLogger = logger.NewNoFileLogger("test")
+var testLogger = logger.NewDiscard()
 
 // scrape снимает текущее состояние метрик через http-хендлер
 func scrape(t *testing.T, m *metrics.Metrics) string {

@@ -3,13 +3,14 @@ package metrics
 
 import (
 	"database/sql"
-	"io"
+	"log/slog"
 	"net/http"
+
+	"aggregator/src/tools/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -58,7 +59,7 @@ var (
 // Собственный реестр вместо глобального: регистрация изолирована в тестах,
 // не течет между ними и не тянет метрики чужих библиотек
 type Metrics struct {
-	log *logrus.Logger
+	log *slog.Logger
 	reg *prometheus.Registry
 
 	buildInfo *prometheus.GaugeVec
@@ -84,7 +85,7 @@ type Metrics struct {
 
 // New собирает метрики на новом реестре.
 // db может быть nil: тогда серии go_sql_* не публикуются
-func New(log *logrus.Logger, version string, db *sql.DB) *Metrics {
+func New(log *slog.Logger, version string, db *sql.DB) *Metrics {
 	if version == "" {
 		version = defaultVersion
 	}
@@ -119,10 +120,7 @@ func New(log *logrus.Logger, version string, db *sql.DB) *Metrics {
 // Nop метрики в выброшенный реестр: используются как дефолт там,
 // где реальный экземпляр не передан (тесты, loadgen)
 func Nop() *Metrics {
-	log := logrus.New()
-	log.SetOutput(io.Discard)
-
-	return New(log, "", nil)
+	return New(logger.NewDiscard(), "", nil)
 }
 
 // Handler http-хендлер экспозиции метрик.
@@ -136,7 +134,7 @@ func (m *Metrics) Handler() http.Handler {
 func (m *Metrics) register(collectorList ...prometheus.Collector) {
 	for _, c := range collectorList {
 		if err := m.reg.Register(c); err != nil {
-			m.log.Errorln("не удалось зарегистрировать коллектор метрик, ошибка", err)
+			m.log.Error("не удалось зарегистрировать коллектор метрик, ошибка", "error", err)
 		}
 	}
 }

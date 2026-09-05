@@ -3,7 +3,6 @@
 export ROOT=../..
 source variables.sh
 
-mkdir -p $ROOT/log
 mkdir -p $ROOT/bin
 
 echo 'BUILD DOCKER'

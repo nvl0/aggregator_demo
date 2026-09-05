@@ -20,27 +20,26 @@ import (
 	"sync"
 )
 
-var (
-	version = os.Getenv("VERSION")
-	module  = "aggregator"
-)
+var version = os.Getenv("VERSION")
 
 // dbConnReserve резерв соединений с бд под параллельные стартовые запросы
 // и пробу готовности /readyz, которая ходит в бд во время цикла агрегации
 const dbConnReserve = 3
 
 func main() {
-	log := logger.NewFileLogger(module)
-	log.Debugln("version", version)
+	log := logger.New()
+	log.Debug("version", "version", version)
 
 	conf, err := config.NewConfig(os.Getenv("CONF_PATH"))
 	if err != nil {
-		log.Fatalln(err)
+		log.Error("не удалось загрузить конфиг", "error", err)
+		os.Exit(1)
 	}
 
 	pgDB := pgdb.SqlxDB(conf.PostgresURL(), conf.WorkerPoolSize()+dbConnReserve)
 	if err = pgDB.Ping(); err != nil {
-		log.Fatalln(err)
+		log.Error("не удалось установить соединение с бд", "error", err)
+		os.Exit(1)
 	}
 
 	// ctx гасит только служебный http сервер: прерывание идущего цикла
@@ -63,7 +62,7 @@ func main() {
 		defer wg.Done()
 
 		if srvErr := httpsrv.Run(ctx, log, conf.MetricsAddr(), mux); srvErr != nil {
-			log.Errorln("служебный http сервер остановлен с ошибкой", srvErr)
+			log.Error("служебный http сервер остановлен с ошибкой", "error", srvErr)
 		}
 	}()
 

@@ -8,7 +8,6 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.12.3
 	github.com/prometheus/client_golang v1.24.1
-	github.com/sirupsen/logrus v1.10.0
 	github.com/stretchr/testify v1.12.0
 	github.com/yl2chen/cidranger v1.0.2
 	go.uber.org/mock v0.6.0

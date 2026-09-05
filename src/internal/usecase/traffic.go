@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/rimport"
 
-	"github.com/sirupsen/logrus"
 	"github.com/yl2chen/cidranger"
 )
 
@@ -21,14 +21,14 @@ import (
 const flowRowFieldCount = 3
 
 type TrafficUsecase struct {
-	log *logrus.Logger
+	log *slog.Logger
 	rimport.RepositoryImports
 	*bimport.BridgeImports
 	internalNet cidranger.Ranger
 }
 
 func NewTrafficUsecase(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
 	internalNet cidranger.Ranger,
@@ -89,15 +89,10 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 
 		var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
 
-		lf := logrus.Fields{
-			"bytes":  bytes,
-			"src_ip": srcIP,
-			"dst_ip": dstIP,
-		}
-
 		// парсинг аргументов
 		if record, err = u.parseRecord(bytes, srcIP, dstIP); err != nil {
-			u.log.WithFields(lf).Warnln(flow.ErrIncorrectRecord(err))
+			u.log.Warn("обнаружена некорректная запись flow, ошибка",
+				"error", err, "bytes", bytes, "src_ip", srcIP, "dst_ip", dstIP)
 			continue
 		}
 
@@ -160,8 +155,8 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 	}
 
 	if classifyErrCount > 0 {
-		u.log.WithField("count", classifyErrCount).
-			Warnln("не удалось проверить принадлежность IP к блоку internal, строки пропущены")
+		u.log.Warn("не удалось проверить принадлежность IP к блоку internal, строки пропущены",
+			"count", classifyErrCount)
 	}
 
 	if len(trafficMap) == 0 {
@@ -252,10 +247,6 @@ func (u *TrafficUsecase) createNewEmptyTrafficMap(channelMap map[channel.ID]bool
 func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ID]bool,
 	trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 	sessionList []session.OnlineSession) (chunkList []session.Chunk, err error) {
-	lf := logrus.Fields{
-		logFieldNasIP: sessionList[0].NasIP,
-	}
-
 	chunkList = make([]session.Chunk, 0, len(sessionList))
 
 	for _, sess := range sessionList {
@@ -279,7 +270,7 @@ func (u *TrafficUsecase) SiftTraffic(channelMap map[channel.ID]bool,
 
 	if len(chunkList) == 0 {
 		err = global.ErrNoData
-		u.log.WithFields(lf).Errorln("не удалось просеять трафик, ошибка", err)
+		u.log.Error("не удалось просеять трафик, ошибка", "error", err, logFieldNasIP, sessionList[0].NasIP)
 	}
 
 	return chunkList, err

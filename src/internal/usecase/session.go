@@ -2,23 +2,22 @@ package usecase
 
 import (
 	"errors"
+	"log/slog"
 
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
-
-	"github.com/sirupsen/logrus"
 )
 
 type SessionUsecase struct {
-	log *logrus.Logger
+	log *slog.Logger
 	//
 	rimport.RepositoryImports
 }
 
 func NewSessionUsecase(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 ) *SessionUsecase {
 	return &SessionUsecase{
@@ -45,7 +44,7 @@ func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
 	case errors.Is(err, global.ErrNoData):
 		return sessionMap, err
 	default:
-		u.log.Errorln("не удалось загрузить список онлайн сессий, ошибка", err)
+		u.log.Error("не удалось загрузить список онлайн сессий, ошибка", "error", err)
 		err = global.ErrInternalError
 		return sessionMap, err
 	}

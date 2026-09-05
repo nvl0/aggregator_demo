@@ -2,20 +2,19 @@ package external
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/uimport"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Cron struct {
-	log *logrus.Logger
+	log *slog.Logger
 	uimport.UsecaseImports
 }
 
-func NewCron(log *logrus.Logger,
+func NewCron(log *slog.Logger,
 	u uimport.UsecaseImports) *Cron {
 	return &Cron{
 		log:            log,
