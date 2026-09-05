@@ -53,7 +53,6 @@ services:
         condition: service_started
         restart: true
     volumes:
-      - ../src/log:/app/log
       - ../src/config/conf.yaml:/app/conf.yaml
       - ../src/flow:/app/flow
       - ../src/subnet-disabled:/app/subnet-disabled

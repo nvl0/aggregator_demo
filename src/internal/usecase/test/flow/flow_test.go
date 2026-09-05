@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	testLogger = logger.NewNoFileLogger("test")
+	testLogger = logger.NewDiscard()
 )
 
 func TestPrepareFlow(t *testing.T) {

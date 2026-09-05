@@ -28,7 +28,6 @@ RUN  apt-get update -qq \
     rm -rf /var/lib/apt/lists/*;
 
 ENV BIN_PATH "/go/src/${NAME}"
-ENV LOG_DIR "log"
 ENV CONF_PATH "conf.yaml"
 ENV FLOW_DIR "flow"
 ENV SUBNET_DISABLED_DIR "subnet-disabled"
@@ -39,7 +38,6 @@ EXPOSE 2112
 COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /app/${NAME}
 
 WORKDIR /app
-VOLUME ["/app/log"]
 VOLUME ["/app/flow"]
 VOLUME ["/app/subnet-disabled"]
 

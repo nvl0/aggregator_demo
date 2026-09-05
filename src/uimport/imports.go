@@ -2,6 +2,7 @@ package uimport
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"aggregator/src/bimport"
@@ -13,8 +14,6 @@ import (
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/subnetrange"
-
-	"github.com/sirupsen/logrus"
 )
 
 type UsecaseImports struct {
@@ -25,7 +24,7 @@ type UsecaseImports struct {
 }
 
 func NewUsecaseImports(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 	bi *bimport.BridgeImports,
 	m *metrics.Metrics,
@@ -39,7 +38,8 @@ func NewUsecaseImports(
 	internalNet, err := subnetrange.CreateDisabledSubnetRange(fmt.Sprintf("%s/%s",
 		os.Getenv("SUBNET_DISABLED_DIR"), flow.InternalDisabled))
 	if err != nil {
-		log.Fatalln(err)
+		log.Error("не удалось создать блок исключенных из подсчета адресов", "error", err)
+		os.Exit(1)
 	}
 
 	ui := UsecaseImports{

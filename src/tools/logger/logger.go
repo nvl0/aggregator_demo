@@ -1,168 +1,32 @@
+// Package logger настраивает структурные логи приложения на log/slog.
 package logger
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"path"
-	"runtime"
-	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
-var debugMode = os.Getenv("DEBUG") == "true"
-
-// newFatalLogger локальный логгер для ошибок инициализации до появления основного логгера приложения
-func newFatalLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, nil))
-}
-
-const (
-	// callerSkipFrames количество пропускаемых кадров стека до вызова логгера
-	callerSkipFrames = 8
-	// callerFrameCapacity размер буфера под кадры стека
-	callerFrameCapacity = 3
-
-	// logFilePerm права на файл-лог: чтение/запись только владельцу
-	logFilePerm = 0o600
-)
-
-type fileLogHook struct {
-	file   *os.File
-	level  string
-	module string
-}
-
-func (f *fileLogHook) Levels() []logrus.Level {
-	switch f.level {
-	case "error":
-		return []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel}
-	case "info":
-		if debugMode {
-			return []logrus.Level{logrus.InfoLevel, logrus.WarnLevel, logrus.DebugLevel}
-		}
-
-		return []logrus.Level{logrus.InfoLevel, logrus.WarnLevel}
-	default:
-		return logrus.AllLevels
-	}
-}
-
-func (f *fileLogHook) SetInfoLevel() {
-	f.level = "info"
-}
-
-func (f *fileLogHook) SetErrorLevel() {
-	f.level = "error"
-}
-
-func (f *fileLogHook) Fire(e *logrus.Entry) error {
-	pc := make([]uintptr, callerFrameCapacity)
-	cnt := runtime.Callers(callerSkipFrames, pc)
-	for i := range cnt {
-		fu := runtime.FuncForPC(pc[i] - 1)
-		name := fu.Name()
-		if !strings.Contains(name, "github.com/sirupsen/logrus") {
-			file, line := fu.FileLine(pc[i] - 1)
-			fileDir := path.Base(path.Dir(file))
-			if !strings.Contains(fileDir, "gin@") {
-				e.Data["file"] = fmt.Sprintf("%s/%s", fileDir, path.Base(file))
-				e.Data["line"] = line
-			}
-
-			break
-		}
+// newHandler собирает JSON-хендлер slog: source в каждой записи,
+// уровень Debug при DEBUG=true, иначе Info
+func newHandler(w io.Writer) slog.Handler {
+	level := slog.LevelInfo
+	if os.Getenv("DEBUG") == "true" {
+		level = slog.LevelDebug
 	}
 
-	str, err := e.String()
-	if err != nil {
-		return err
-	}
-
-	str = fmt.Sprintf("[%s] %s", f.module, str)
-
-	_, err = io.Writer(f.file).Write([]byte(str))
-
-	return err
+	return slog.NewJSONHandler(w, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     level,
+	})
 }
 
-func textFormatter() *logrus.TextFormatter {
-	customFormatter := new(logrus.TextFormatter)
-	customFormatter.TimestampFormat = "02.01.2006 15:04:05"
-	customFormatter.FullTimestamp = true
-	customFormatter.ForceColors = true
-
-	return customFormatter
+// New основной логгер приложения: JSON в stdout, с source, уровень по DEBUG
+func New() *slog.Logger {
+	return slog.New(newHandler(os.Stdout))
 }
 
-func openFile(fileName string) *fileLogHook {
-	hook := new(fileLogHook)
-	logDir := os.Getenv("LOG_DIR")
-	file, err := os.OpenFile(fmt.Sprintf("%s/%s", logDir, fileName), os.O_CREATE|os.O_APPEND|os.O_WRONLY, logFilePerm)
-	if err == nil {
-		hook.file = file
-	} else {
-		newFatalLogger().Error("Нет возможности писать в файл-логи. Убедитесь, что существует папка c правом доступа", "log_dir", logDir)
-		os.Exit(1)
-	}
-
-	return hook
-}
-
-// NewFileLogger файловый логгер
-func NewFileLogger(module string) *logrus.Logger {
-	newLogger := logrus.New()
-	newLogger.Formatter = textFormatter()
-
-	fileHook := openFile(fmt.Sprintf("%s.log", module))
-	fileHook.SetInfoLevel()
-	fileHook.module = module
-	newLogger.Hooks.Add(fileHook)
-
-	errorFileHook := openFile(fmt.Sprintf("%s_error.log", module))
-	errorFileHook.SetErrorLevel()
-	errorFileHook.module = module
-
-	newLogger.Hooks.Add(errorFileHook)
-
-	if debugMode {
-		newLogger.Level = logrus.DebugLevel
-	}
-
-	return newLogger
-}
-
-// NewNoFileLogger файловый логгер
-func NewNoFileLogger(_ string) *logrus.Logger {
-	newLogger := logrus.New()
-	newLogger.Formatter = textFormatter()
-
-	newLogger.Level = logrus.DebugLevel
-
-	return newLogger
-}
-
-// NewSingleLogger файловый логгер без раздления лога ошибок
-func NewSingleLogger(module string) *logrus.Logger {
-	newLogger := logrus.New()
-	newLogger.Formatter = textFormatter()
-	fileName := fmt.Sprintf("%s.log", module)
-	fileHook := openFile(fileName)
-	fileHook.SetInfoLevel()
-	fileHook.module = module
-	newLogger.Hooks.Add(fileHook)
-
-	errorFileHook := openFile(fileName)
-	errorFileHook.SetErrorLevel()
-	errorFileHook.module = module
-
-	newLogger.Hooks.Add(errorFileHook)
-
-	if debugMode {
-		newLogger.Level = logrus.DebugLevel
-	}
-
-	return newLogger
+// NewDiscard логгер-заглушка для тестов
+func NewDiscard() *slog.Logger {
+	return slog.New(slog.DiscardHandler)
 }

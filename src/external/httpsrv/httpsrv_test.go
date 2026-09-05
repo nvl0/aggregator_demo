@@ -14,7 +14,7 @@ import (
 // waitTimeout предельное ожидание возврата Run в тестах
 const waitTimeout = 5 * time.Second
 
-var testLogger = logger.NewNoFileLogger("test")
+var testLogger = logger.NewDiscard()
 
 // freeAddr занимает свободный порт, освобождает его и возвращает адрес
 func freeAddr(t *testing.T) string {

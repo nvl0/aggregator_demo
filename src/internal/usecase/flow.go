@@ -2,25 +2,22 @@ package usecase
 
 import (
 	"errors"
+	"log/slog"
+	"strings"
 
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
-
-	"strings"
-
 	"aggregator/src/rimport"
-
-	"github.com/sirupsen/logrus"
 )
 
 type FlowUsecase struct {
-	log *logrus.Logger
+	log *slog.Logger
 	//
 	rimport.RepositoryImports
 }
 
 func NewFlowUsecase(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 ) *FlowUsecase {
 	return &FlowUsecase{
@@ -36,10 +33,6 @@ func (u *FlowUsecase) PrepareFlow(
 	dirName string,
 	skipFileNames map[string]bool,
 ) (flowStr string, fileNameList []string, err error) {
-	lf := logrus.Fields{
-		"dir_name": dirName,
-	}
-
 	// получение списка имен файлов с директории
 	// чтобы перенести их в директорию ./tmp для считывания
 	fileNameListInDir, err := u.Repository.Flow.ReadFileNamesInFlowDir(dirName)
@@ -51,7 +44,7 @@ func (u *FlowUsecase) PrepareFlow(
 			if strings.Contains(fileName, flow.FlowNameSubStr) {
 				// перенос flow файла в директорию ./tmp
 				if err = u.Repository.Flow.MoveFlowToTempDir(dirName, fileName); err != nil {
-					u.log.WithFields(lf).Errorln("не удалось переместить готовый flow в tmp, ошибка", err)
+					u.log.Error("не удалось переместить готовый flow в tmp, ошибка", "error", err, "dir_name", dirName)
 					return flowStr, fileNameList, err
 				}
 			}
@@ -59,7 +52,7 @@ func (u *FlowUsecase) PrepareFlow(
 
 		// чтение flow файла с директории ./tmp
 		if flowStr, fileNameList, err = u.Repository.Flow.ReadFlow(dirName, skipFileNames); err != nil {
-			u.log.WithFields(lf).Errorln("не удалось считать готовый flow с директории, ошибка", err)
+			u.log.Error("не удалось считать готовый flow с директории, ошибка", "error", err, "dir_name", dirName)
 			err = global.ErrInternalError
 			return flowStr, fileNameList, err
 		}
@@ -68,7 +61,7 @@ func (u *FlowUsecase) PrepareFlow(
 	case errors.Is(err, global.ErrNoData):
 		return flowStr, fileNameList, err
 	default:
-		u.log.WithFields(lf).Errorln("не удалось просмотреть директорию, ошибка", err)
+		u.log.Error("не удалось просмотреть директорию, ошибка", "error", err, "dir_name", dirName)
 		err = global.ErrInternalError
 		return flowStr, fileNameList, err
 	}

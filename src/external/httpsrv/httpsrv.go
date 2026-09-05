@@ -4,10 +4,9 @@ package httpsrv
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -27,7 +26,7 @@ const (
 // Run поднимает http сервер на addr и блокируется до отмены ctx.
 // По отмене контекста выполняет graceful shutdown и возвращает его результат.
 // Штатное закрытие сервера (http.ErrServerClosed) ошибкой не считается
-func Run(ctx context.Context, log *logrus.Logger, addr string, h http.Handler) error {
+func Run(ctx context.Context, log *slog.Logger, addr string, h http.Handler) error {
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           h,
@@ -41,7 +40,7 @@ func Run(ctx context.Context, log *logrus.Logger, addr string, h http.Handler) e
 	errChan := make(chan error, 1)
 
 	go func() {
-		log.Infoln("служебный http сервер запущен, адрес", addr)
+		log.InfoContext(ctx, "служебный http сервер запущен, адрес", "addr", addr)
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errChan <- err
@@ -54,7 +53,7 @@ func Run(ctx context.Context, log *logrus.Logger, addr string, h http.Handler) e
 
 	select {
 	case err := <-errChan:
-		log.Errorln("служебный http сервер завершился, ошибка", err)
+		log.ErrorContext(ctx, "служебный http сервер завершился, ошибка", "error", err)
 
 		return err
 	case <-ctx.Done():
@@ -64,7 +63,7 @@ func Run(ctx context.Context, log *logrus.Logger, addr string, h http.Handler) e
 	sc, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	log.Infoln("остановка служебного http сервера")
+	log.InfoContext(ctx, "остановка служебного http сервера")
 
 	return srv.Shutdown(sc)
 }

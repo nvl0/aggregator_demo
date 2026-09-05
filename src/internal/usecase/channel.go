@@ -2,23 +2,22 @@ package usecase
 
 import (
 	"errors"
+	"log/slog"
 
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
-
-	"github.com/sirupsen/logrus"
 )
 
 type ChannelUsecase struct {
-	log *logrus.Logger
+	log *slog.Logger
 	//
 	rimport.RepositoryImports
 }
 
 func NewChannelUsecase(
-	log *logrus.Logger,
+	log *slog.Logger,
 	ri rimport.RepositoryImports,
 ) *ChannelUsecase {
 	return &ChannelUsecase{
@@ -44,7 +43,7 @@ func (u *ChannelUsecase) LoadChannelMap(ts transaction.Session) (
 	case errors.Is(err, global.ErrNoData):
 		return channelMap, err
 	default:
-		u.log.Errorln("не удалось загрузить список каналов, ошибка", err)
+		u.log.Error("не удалось загрузить список каналов, ошибка", "error", err)
 		err = global.ErrInternalError
 		return channelMap, err
 	}

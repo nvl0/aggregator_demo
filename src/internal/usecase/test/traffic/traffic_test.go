@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	testLogger = logger.NewNoFileLogger("test")
+	testLogger = logger.NewDiscard()
 )
 
 func TestParseFlow(t *testing.T) {
