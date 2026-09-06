@@ -22,18 +22,15 @@ func NewCron(log *slog.Logger,
 	}
 }
 
-func (c *Cron) Run(termFlag <-chan struct{}) {
+func (c *Cron) Run(ctx context.Context) {
 	tick := time.NewTicker(global.StartDur)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer tick.Stop()
 
 loop:
 	for {
 		select {
 		case <-tick.C:
 			c.Usecase.Aggregator.Start(ctx)
-		case <-termFlag:
-			break loop
 		case <-ctx.Done():
 			break loop
 		}
