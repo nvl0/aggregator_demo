@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
@@ -27,10 +28,10 @@ func NewSessionUsecase(
 }
 
 // LoadOnlineSessionMap map[nas_ip][]session.OnlineSession
-func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
+func (u *SessionUsecase) LoadOnlineSessionMap(ctx context.Context, ts transaction.Session) (
 	sessionMap map[session.NasIP][]session.OnlineSession, err error) {
 	// получение списка онлайн сессий
-	sessionList, err := u.Repository.Session.LoadOnlineSessionList(ts)
+	sessionList, err := u.Repository.Session.LoadOnlineSessionList(ctx, ts)
 	switch {
 	case err == nil:
 		sessionMap = make(map[session.NasIP][]session.OnlineSession)
@@ -44,7 +45,7 @@ func (u *SessionUsecase) LoadOnlineSessionMap(ts transaction.Session) (
 	case errors.Is(err, global.ErrNoData):
 		return sessionMap, err
 	default:
-		u.log.Error("не удалось загрузить список онлайн сессий, ошибка", "error", err)
+		u.log.ErrorContext(ctx, "не удалось загрузить список онлайн сессий, ошибка", "error", err)
 		err = global.ErrInternalError
 		return sessionMap, err
 	}

@@ -1,6 +1,8 @@
 package postgresql
 
 import (
+	"context"
+
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/repository"
 	"aggregator/src/internal/transaction"
@@ -15,11 +17,14 @@ func NewChannelRepository() repository.Channel {
 }
 
 // LoadOnlineSessionList загрузить список каналов
-func (r *channelRepository) LoadChannelList(ts transaction.Session) ([]channel.Channel, error) {
+func (r *channelRepository) LoadChannelList(
+	ctx context.Context,
+	ts transaction.Session,
+) ([]channel.Channel, error) {
 	sqlQuery := `
 		select c.channel_id, c.enabled, c.descr
 		from channel c
 		order by c.channel_id`
 
-	return gensql.Select[channel.Channel](SqlxTx(ts), sqlQuery)
+	return gensql.Select[channel.Channel](ctx, SqlxTx(ts), sqlQuery)
 }

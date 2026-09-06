@@ -10,14 +10,15 @@ import (
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
-	"aggregator/src/tools/ossignal"
 	"aggregator/src/tools/pgdb"
 	"aggregator/src/uimport"
 
 	"context"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 )
 
 var version = os.Getenv("VERSION")
@@ -42,10 +43,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ctx гасит только служебный http сервер: прерывание идущего цикла
-	// агрегации в скоуп 2a не входит
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	var wg sync.WaitGroup
 
@@ -82,19 +81,10 @@ func main() {
 		ui.Usecase.Aggregator,
 	)
 
-	flagTerm := make(chan struct{})
-	go ossignal.WaitForTerm(flagTerm)
-
-	// flagTerm закрывается в ossignal.WaitForTerm, close будит всех читателей
-	go func() {
-		<-flagTerm
-		cancel()
-	}()
-
-	external.NewCron(log, ui).Run(flagTerm)
+	external.NewCron(log, ui).Run(ctx)
 
 	// Run мог выйти не по сигналу, поэтому гасим сервер явно
-	cancel()
+	stop()
 	// даем httpsrv.Shutdown доработать
 	wg.Wait()
 }

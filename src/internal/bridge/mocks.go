@@ -14,6 +14,7 @@ import (
 	session "aggregator/src/internal/entity/session"
 	traffic "aggregator/src/internal/entity/traffic"
 	transaction "aggregator/src/internal/transaction"
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -84,18 +85,18 @@ func (m *MockSession) EXPECT() *MockSessionMockRecorder {
 }
 
 // LoadOnlineSessionMap mocks base method.
-func (m *MockSession) LoadOnlineSessionMap(ts transaction.Session) (map[session.NasIP][]session.OnlineSession, error) {
+func (m *MockSession) LoadOnlineSessionMap(ctx context.Context, ts transaction.Session) (map[session.NasIP][]session.OnlineSession, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadOnlineSessionMap", ts)
+	ret := m.ctrl.Call(m, "LoadOnlineSessionMap", ctx, ts)
 	ret0, _ := ret[0].(map[session.NasIP][]session.OnlineSession)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LoadOnlineSessionMap indicates an expected call of LoadOnlineSessionMap.
-func (mr *MockSessionMockRecorder) LoadOnlineSessionMap(ts any) *gomock.Call {
+func (mr *MockSessionMockRecorder) LoadOnlineSessionMap(ctx, ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionMap", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionMap), ts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionMap", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionMap), ctx, ts)
 }
 
 // MockChannel is a mock of Channel interface.
@@ -123,18 +124,18 @@ func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
 }
 
 // LoadChannelMap mocks base method.
-func (m *MockChannel) LoadChannelMap(ts transaction.Session) (map[channel.ID]bool, error) {
+func (m *MockChannel) LoadChannelMap(ctx context.Context, ts transaction.Session) (map[channel.ID]bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadChannelMap", ts)
+	ret := m.ctrl.Call(m, "LoadChannelMap", ctx, ts)
 	ret0, _ := ret[0].(map[channel.ID]bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LoadChannelMap indicates an expected call of LoadChannelMap.
-func (mr *MockChannelMockRecorder) LoadChannelMap(ts any) *gomock.Call {
+func (mr *MockChannelMockRecorder) LoadChannelMap(ctx, ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelMap", reflect.TypeOf((*MockChannel)(nil).LoadChannelMap), ts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelMap", reflect.TypeOf((*MockChannel)(nil).LoadChannelMap), ctx, ts)
 }
 
 // MockTraffic is a mock of Traffic interface.
@@ -230,13 +231,13 @@ func (m *MockAggregator) EXPECT() *MockAggregatorMockRecorder {
 }
 
 // Aggregate mocks base method.
-func (m *MockAggregator) Aggregate(nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ID]bool) {
+func (m *MockAggregator) Aggregate(ctx context.Context, nasIP string, sessionList []session.OnlineSession, channelMap map[channel.ID]bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Aggregate", nasIP, sessionList, channelMap)
+	m.ctrl.Call(m, "Aggregate", ctx, nasIP, sessionList, channelMap)
 }
 
 // Aggregate indicates an expected call of Aggregate.
-func (mr *MockAggregatorMockRecorder) Aggregate(nasIP, sessionList, channelMap any) *gomock.Call {
+func (mr *MockAggregatorMockRecorder) Aggregate(ctx, nasIP, sessionList, channelMap any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), nasIP, sessionList, channelMap)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockAggregator)(nil).Aggregate), ctx, nasIP, sessionList, channelMap)
 }

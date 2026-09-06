@@ -1,7 +1,9 @@
 package transaction
 
+import "context"
+
 type Session interface {
-	Start() error
+	Start(ctx context.Context) error
 	Rollback() error
 	Commit() error
 	Tx() interface{}

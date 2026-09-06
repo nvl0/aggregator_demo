@@ -10,6 +10,7 @@
 package transaction
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -68,17 +69,17 @@ func (mr *MockSessionMockRecorder) Rollback() *gomock.Call {
 }
 
 // Start mocks base method.
-func (m *MockSession) Start() error {
+func (m *MockSession) Start(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start")
+	ret := m.ctrl.Call(m, "Start", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockSessionMockRecorder) Start() *gomock.Call {
+func (mr *MockSessionMockRecorder) Start(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockSession)(nil).Start))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockSession)(nil).Start), ctx)
 }
 
 // Tx mocks base method.

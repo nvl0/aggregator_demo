@@ -69,15 +69,15 @@ func TestStart(t *testing.T) {
 				dirList := []string{nasIP}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
+				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
 				for _, item := range dirList {
-					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(nasIP,
+					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(gomock.Any(), nasIP,
 						sessionMap[item], channelMap)
 				}
 			},
@@ -104,9 +104,9 @@ func TestStart(t *testing.T) {
 				dirList := []string{nasIP}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
+				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
@@ -136,17 +136,17 @@ func TestStart(t *testing.T) {
 				dirList := []string{nasIP}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
+				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
 				// если пул не перехватит панику, упадет весь тестовый процесс
 				f.bi.TestBridge.Aggregator.EXPECT().
-					Aggregate(nasIP, sessionMap[nasIP], channelMap).
-					Do(func(_ string, _ []session.OnlineSession, _ map[channel.ID]bool) {
+					Aggregate(gomock.Any(), nasIP, sessionMap[nasIP], channelMap).
+					Do(func(_ context.Context, _ string, _ []session.OnlineSession, _ map[channel.ID]bool) {
 						panic("паника тестового воркера")
 					})
 			},
@@ -183,6 +183,7 @@ func TestAggregate(t *testing.T) {
 		ts *transaction.MockSession
 	}
 	type args struct {
+		ctx         context.Context
 		nasIP       string
 		sessionList []session.OnlineSession
 		channelMap  map[channel.ID]bool
@@ -251,28 +252,29 @@ func TestAggregate(t *testing.T) {
 
 				// три транзакции: загрузка чекпоинта, сохранение чанков, удаление чекпоинта
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
-				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
 				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
-					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+						SaveFileNames(gomock.Any(), f.ts, nasIP, fileNameList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -287,20 +289,21 @@ func TestAggregate(t *testing.T) {
 				// две транзакции: загрузка чекпоинта и его удаление,
 				// транзакция сохранения чанков не открывается
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return("", fileNameList, nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -313,12 +316,12 @@ func TestAggregate(t *testing.T) {
 				fileNameList := []string{oldFile, newFile}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
-				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
 				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					// flowStr содержит только новый файл, старый пропущен в ReadFlow
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
@@ -326,17 +329,18 @@ func TestAggregate(t *testing.T) {
 						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
-					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					// в чекпоинт уходит и уже известный oldFile, и новый newFile
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+						SaveFileNames(gomock.Any(), f.ts, nasIP, fileNameList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -351,21 +355,21 @@ func TestAggregate(t *testing.T) {
 				// две транзакции: загрузка чекпоинта и сохранение чанков,
 				// транзакция удаления чекпоинта не открывается
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
-					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+						SaveFileNames(gomock.Any(), f.ts, nasIP, fileNameList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().
 						RemoveOld(nasIP).Return(errors.New("диск недоступен")),
@@ -374,6 +378,7 @@ func TestAggregate(t *testing.T) {
 				// RemoveByNasIP не ожидается: чекпоинт обязан пережить неудачную очистку
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -388,25 +393,26 @@ func TestAggregate(t *testing.T) {
 				// две транзакции: загрузка чекпоинта и его удаление при очистке tmp,
 				// транзакция сохранения чанков не открывается
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						ParseFlow(channelMap, flowStr).Return(nil, global.ErrNoData),
 					// файлы уже в tmp: их обязательно нужно убрать, иначе они копятся
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 
 				// SaveChunkList / SaveFileNames не ожидаются: сохранять нечего
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -419,12 +425,12 @@ func TestAggregate(t *testing.T) {
 				fileNameList := []string{newFile}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start().Return(nil).Times(2)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
@@ -432,11 +438,12 @@ func TestAggregate(t *testing.T) {
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(nil, global.ErrNoData),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -451,12 +458,12 @@ func TestAggregate(t *testing.T) {
 				// одна транзакция: только загрузка чекпоинта.
 				// очистка tmp не вызывается — flow должен остаться на диске
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
-				f.ts.EXPECT().Start().Return(nil).Times(1)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(1)
 				f.ts.EXPECT().Rollback().Return(nil).Times(1)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
@@ -466,6 +473,7 @@ func TestAggregate(t *testing.T) {
 				// RemoveOld / RemoveByNasIP не ожидаются
 			},
 			args: args{
+				ctx:         context.Background(),
 				nasIP:       nasIP,
 				sessionList: sessionList,
 				channelMap:  channelMap,
@@ -488,7 +496,7 @@ func TestAggregate(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
 
-			ui.Usecase.Aggregator.Aggregate(tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
+			ui.Usecase.Aggregator.Aggregate(tt.args.ctx, tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
 		})
 	}
 }
@@ -562,24 +570,24 @@ func TestAggregateMetrics(t *testing.T) {
 				fileNameList := []string{newFile}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
-				f.ts.EXPECT().Start().Return(nil).Times(3)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
 				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
-					f.ri.MockRepository.Session.EXPECT().SaveChunkList(f.ts, chunkList).Return(nil),
+					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						SaveFileNames(f.ts, nasIP, fileNameList).Return(nil),
+						SaveFileNames(gomock.Any(), f.ts, nasIP, fileNameList).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
-					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(f.ts, nasIP).Return(nil),
+					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
 				)
 			},
@@ -600,12 +608,12 @@ func TestAggregateMetrics(t *testing.T) {
 				fileNameList := []string{newFile}
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
-				f.ts.EXPECT().Start().Return(nil).Times(1)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(1)
 				f.ts.EXPECT().Rollback().Return(nil).Times(1)
 
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
-						LoadCommittedFileNames(f.ts, nasIP).Return(committedFileNames, nil),
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
 					f.bi.TestBridge.Flow.EXPECT().
 						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
 					f.bi.TestBridge.Traffic.EXPECT().
@@ -636,7 +644,7 @@ func TestAggregateMetrics(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), m)
 
-			ui.Usecase.Aggregator.Aggregate(nasIP, sessionList, channelMap)
+			ui.Usecase.Aggregator.Aggregate(context.Background(), nasIP, sessionList, channelMap)
 
 			body := scrapeMetrics(t, m)
 

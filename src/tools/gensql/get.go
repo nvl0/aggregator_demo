@@ -1,6 +1,7 @@
 package gensql
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -9,10 +10,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func Get[T any](tx *sqlx.Tx, sqlQuery string, params ...interface{}) (t T, err error) {
+func Get[T any](ctx context.Context, tx *sqlx.Tx, sqlQuery string, params ...interface{}) (t T, err error) {
 	var data T
 
-	err = tx.Get(&data, sqlQuery, params...)
+	err = tx.GetContext(ctx, &data, sqlQuery, params...)
 
 	switch {
 	case err == nil:
@@ -25,16 +26,21 @@ func Get[T any](tx *sqlx.Tx, sqlQuery string, params ...interface{}) (t T, err e
 	}
 }
 
-func GetNamed[T any](tx *sqlx.Tx, sqlQuery string, params map[string]interface{}) (t T, err error) {
+func GetNamed[T any](
+	ctx context.Context,
+	tx *sqlx.Tx,
+	sqlQuery string,
+	params map[string]interface{},
+) (t T, err error) {
 	var data T
 
-	stmt, err := tx.PrepareNamed(sqlQuery)
+	stmt, err := tx.PrepareNamedContext(ctx, sqlQuery)
 	if err != nil {
 		return t, err
 	}
 	defer stmt.Close()
 
-	err = stmt.Get(&data, params)
+	err = stmt.GetContext(ctx, &data, params)
 	switch {
 	case err == nil:
 		return data, nil
@@ -46,16 +52,16 @@ func GetNamed[T any](tx *sqlx.Tx, sqlQuery string, params map[string]interface{}
 	}
 }
 
-func GetNamedStruct[T any, S any](tx *sqlx.Tx, sqlQuery string, s S) (t T, err error) {
+func GetNamedStruct[T any, S any](ctx context.Context, tx *sqlx.Tx, sqlQuery string, s S) (t T, err error) {
 	var data T
 
-	stmt, err := tx.PrepareNamed(sqlQuery)
+	stmt, err := tx.PrepareNamedContext(ctx, sqlQuery)
 	if err != nil {
 		return t, err
 	}
 	defer stmt.Close()
 
-	err = stmt.Get(&data, s)
+	err = stmt.GetContext(ctx, &data, s)
 	switch {
 	case err == nil:
 		return data, nil

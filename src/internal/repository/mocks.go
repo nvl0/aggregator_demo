@@ -13,6 +13,7 @@ import (
 	channel "aggregator/src/internal/entity/channel"
 	session "aggregator/src/internal/entity/session"
 	transaction "aggregator/src/internal/transaction"
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -43,18 +44,18 @@ func (m *MockChannel) EXPECT() *MockChannelMockRecorder {
 }
 
 // LoadChannelList mocks base method.
-func (m *MockChannel) LoadChannelList(ts transaction.Session) ([]channel.Channel, error) {
+func (m *MockChannel) LoadChannelList(ctx context.Context, ts transaction.Session) ([]channel.Channel, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadChannelList", ts)
+	ret := m.ctrl.Call(m, "LoadChannelList", ctx, ts)
 	ret0, _ := ret[0].([]channel.Channel)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LoadChannelList indicates an expected call of LoadChannelList.
-func (mr *MockChannelMockRecorder) LoadChannelList(ts any) *gomock.Call {
+func (mr *MockChannelMockRecorder) LoadChannelList(ctx, ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelList", reflect.TypeOf((*MockChannel)(nil).LoadChannelList), ts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadChannelList", reflect.TypeOf((*MockChannel)(nil).LoadChannelList), ctx, ts)
 }
 
 // MockSession is a mock of Session interface.
@@ -82,32 +83,32 @@ func (m *MockSession) EXPECT() *MockSessionMockRecorder {
 }
 
 // LoadOnlineSessionList mocks base method.
-func (m *MockSession) LoadOnlineSessionList(ts transaction.Session) ([]session.OnlineSession, error) {
+func (m *MockSession) LoadOnlineSessionList(ctx context.Context, ts transaction.Session) ([]session.OnlineSession, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadOnlineSessionList", ts)
+	ret := m.ctrl.Call(m, "LoadOnlineSessionList", ctx, ts)
 	ret0, _ := ret[0].([]session.OnlineSession)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LoadOnlineSessionList indicates an expected call of LoadOnlineSessionList.
-func (mr *MockSessionMockRecorder) LoadOnlineSessionList(ts any) *gomock.Call {
+func (mr *MockSessionMockRecorder) LoadOnlineSessionList(ctx, ts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionList", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionList), ts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadOnlineSessionList", reflect.TypeOf((*MockSession)(nil).LoadOnlineSessionList), ctx, ts)
 }
 
 // SaveChunkList mocks base method.
-func (m *MockSession) SaveChunkList(ts transaction.Session, chunkList []session.Chunk) error {
+func (m *MockSession) SaveChunkList(ctx context.Context, ts transaction.Session, chunkList []session.Chunk) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveChunkList", ts, chunkList)
+	ret := m.ctrl.Call(m, "SaveChunkList", ctx, ts, chunkList)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveChunkList indicates an expected call of SaveChunkList.
-func (mr *MockSessionMockRecorder) SaveChunkList(ts, chunkList any) *gomock.Call {
+func (mr *MockSessionMockRecorder) SaveChunkList(ctx, ts, chunkList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChunkList", reflect.TypeOf((*MockSession)(nil).SaveChunkList), ts, chunkList)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChunkList", reflect.TypeOf((*MockSession)(nil).SaveChunkList), ctx, ts, chunkList)
 }
 
 // MockFlowBatch is a mock of FlowBatch interface.
@@ -135,46 +136,46 @@ func (m *MockFlowBatch) EXPECT() *MockFlowBatchMockRecorder {
 }
 
 // LoadCommittedFileNames mocks base method.
-func (m *MockFlowBatch) LoadCommittedFileNames(ts transaction.Session, nasIP string) (map[string]bool, error) {
+func (m *MockFlowBatch) LoadCommittedFileNames(ctx context.Context, ts transaction.Session, nasIP string) (map[string]bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadCommittedFileNames", ts, nasIP)
+	ret := m.ctrl.Call(m, "LoadCommittedFileNames", ctx, ts, nasIP)
 	ret0, _ := ret[0].(map[string]bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // LoadCommittedFileNames indicates an expected call of LoadCommittedFileNames.
-func (mr *MockFlowBatchMockRecorder) LoadCommittedFileNames(ts, nasIP any) *gomock.Call {
+func (mr *MockFlowBatchMockRecorder) LoadCommittedFileNames(ctx, ts, nasIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadCommittedFileNames", reflect.TypeOf((*MockFlowBatch)(nil).LoadCommittedFileNames), ts, nasIP)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadCommittedFileNames", reflect.TypeOf((*MockFlowBatch)(nil).LoadCommittedFileNames), ctx, ts, nasIP)
 }
 
 // RemoveByNasIP mocks base method.
-func (m *MockFlowBatch) RemoveByNasIP(ts transaction.Session, nasIP string) error {
+func (m *MockFlowBatch) RemoveByNasIP(ctx context.Context, ts transaction.Session, nasIP string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveByNasIP", ts, nasIP)
+	ret := m.ctrl.Call(m, "RemoveByNasIP", ctx, ts, nasIP)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveByNasIP indicates an expected call of RemoveByNasIP.
-func (mr *MockFlowBatchMockRecorder) RemoveByNasIP(ts, nasIP any) *gomock.Call {
+func (mr *MockFlowBatchMockRecorder) RemoveByNasIP(ctx, ts, nasIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveByNasIP", reflect.TypeOf((*MockFlowBatch)(nil).RemoveByNasIP), ts, nasIP)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveByNasIP", reflect.TypeOf((*MockFlowBatch)(nil).RemoveByNasIP), ctx, ts, nasIP)
 }
 
 // SaveFileNames mocks base method.
-func (m *MockFlowBatch) SaveFileNames(ts transaction.Session, nasIP string, fileNameList []string) error {
+func (m *MockFlowBatch) SaveFileNames(ctx context.Context, ts transaction.Session, nasIP string, fileNameList []string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveFileNames", ts, nasIP, fileNameList)
+	ret := m.ctrl.Call(m, "SaveFileNames", ctx, ts, nasIP, fileNameList)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveFileNames indicates an expected call of SaveFileNames.
-func (mr *MockFlowBatchMockRecorder) SaveFileNames(ts, nasIP, fileNameList any) *gomock.Call {
+func (mr *MockFlowBatchMockRecorder) SaveFileNames(ctx, ts, nasIP, fileNameList any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveFileNames", reflect.TypeOf((*MockFlowBatch)(nil).SaveFileNames), ts, nasIP, fileNameList)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveFileNames", reflect.TypeOf((*MockFlowBatch)(nil).SaveFileNames), ctx, ts, nasIP, fileNameList)
 }
 
 // MockFlow is a mock of Flow interface.

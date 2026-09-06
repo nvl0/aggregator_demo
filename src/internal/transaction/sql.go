@@ -1,6 +1,8 @@
 package transaction
 
 import (
+	"context"
+
 	"github.com/jmoiron/sqlx"
 )
 
@@ -14,13 +16,13 @@ func NewSQLSession(db *sqlx.DB) Session {
 	return &sqlSession{db: db}
 }
 
-func (t *sqlSession) Start() (err error) {
+func (t *sqlSession) Start(ctx context.Context) (err error) {
 	if t.init && t.currentTx != nil {
 		err = ErrActiveTransaction
 		return err
 	}
 	t.init = true
-	t.currentTx, err = t.db.Beginx()
+	t.currentTx, err = t.db.BeginTxx(ctx, nil)
 	return err
 }
 
