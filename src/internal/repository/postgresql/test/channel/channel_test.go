@@ -1,6 +1,7 @@
 package channel_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestLoadChannelList(t *testing.T) {
 	repo := postgresql.NewChannelRepository()
 
 	ts := transaction.NewSQLSession(db)
-	r.NoError(ts.Start())
+	r.NoError(ts.Start(context.Background()))
 	defer ts.Rollback()
 
 	t.Run("подготовка данных", func(t *testing.T) {
@@ -36,7 +37,7 @@ func TestLoadChannelList(t *testing.T) {
 			Descr:   "repo_test",
 		}
 
-		expectedData.ID, err = gensql.GetNamedStruct[channel.ID](postgresql.SqlxTx(ts), `
+		expectedData.ID, err = gensql.GetNamedStruct[channel.ID](context.Background(), postgresql.SqlxTx(ts), `
 			insert into channel (enabled, descr)
 			values (:enabled, :descr)
 			returning channel_id
@@ -44,7 +45,7 @@ func TestLoadChannelList(t *testing.T) {
 		r.NoError(err)
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errLoad := repo.LoadChannelList(ts)
+			data, errLoad := repo.LoadChannelList(context.Background(), ts)
 			r.NoError(errLoad)
 			r.Contains(data, expectedData)
 		})

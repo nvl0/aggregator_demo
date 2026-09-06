@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
@@ -27,10 +28,10 @@ func NewChannelUsecase(
 }
 
 // LoadChannelMap map[channel_id]enabled
-func (u *ChannelUsecase) LoadChannelMap(ts transaction.Session) (
+func (u *ChannelUsecase) LoadChannelMap(ctx context.Context, ts transaction.Session) (
 	channelMap map[channel.ID]bool, err error) {
 	// получение списка каналов
-	channelList, err := u.Repository.Channel.LoadChannelList(ts)
+	channelList, err := u.Repository.Channel.LoadChannelList(ctx, ts)
 	switch {
 	case err == nil:
 		channelMap = make(map[channel.ID]bool, len(channelList))
@@ -43,7 +44,7 @@ func (u *ChannelUsecase) LoadChannelMap(ts transaction.Session) (
 	case errors.Is(err, global.ErrNoData):
 		return channelMap, err
 	default:
-		u.log.Error("не удалось загрузить список каналов, ошибка", "error", err)
+		u.log.ErrorContext(ctx, "не удалось загрузить список каналов, ошибка", "error", err)
 		err = global.ErrInternalError
 		return channelMap, err
 	}

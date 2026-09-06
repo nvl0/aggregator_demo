@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -27,7 +28,7 @@ func TestLoadOnlineSessionList(t *testing.T) {
 	repo := postgresql.NewSessionRepository()
 
 	ts := transaction.NewSQLSession(db)
-	r.NoError(ts.Start())
+	r.NoError(ts.Start(context.Background()))
 	defer ts.Rollback()
 
 	t.Run("подготовка данных", func(t *testing.T) {
@@ -44,7 +45,7 @@ func TestLoadOnlineSessionList(t *testing.T) {
 		r.NoError(err)
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errLoad := repo.LoadOnlineSessionList(ts)
+			data, errLoad := repo.LoadOnlineSessionList(context.Background(), ts)
 			r.NoError(errLoad)
 			r.Contains(data, expectedData)
 		})
@@ -64,7 +65,7 @@ func TestSaveChunkList(t *testing.T) {
 	repo := postgresql.NewSessionRepository()
 
 	ts := transaction.NewSQLSession(db)
-	r.NoError(ts.Start())
+	r.NoError(ts.Start(context.Background()))
 	defer ts.Rollback()
 
 	t.Run("сохранение данных", func(t *testing.T) {
@@ -77,10 +78,10 @@ func TestSaveChunkList(t *testing.T) {
 
 		expectedData := []session.Chunk{chunk, chunk}
 
-		r.NoError(repo.SaveChunkList(ts, expectedData))
+		r.NoError(repo.SaveChunkList(context.Background(), ts, expectedData))
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errSelect := gensql.Select[session.Chunk](postgresql.SqlxTx(ts), `
+			data, errSelect := gensql.Select[session.Chunk](context.Background(), postgresql.SqlxTx(ts), `
 				select sess_id, channel_id, download, upload
 				from chunk
 				where sess_id = $1 and channel_id = $2

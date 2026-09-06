@@ -1,6 +1,8 @@
 package postgresql
 
 import (
+	"context"
+
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/repository"
 	"aggregator/src/internal/transaction"
@@ -17,19 +19,26 @@ func NewSessionRepository() repository.Session {
 }
 
 // LoadOnlineSessionList загрузить онлайн сессий из таблицы
-func (r *sessionRepository) LoadOnlineSessionList(ts transaction.Session) ([]session.OnlineSession, error) {
+func (r *sessionRepository) LoadOnlineSessionList(
+	ctx context.Context,
+	ts transaction.Session,
+) ([]session.OnlineSession, error) {
 	sqlQuery := `
 		select o.ip, o.sess_id, o.nas_ip
 		from online_session o`
 
-	return gensql.Select[session.OnlineSession](SqlxTx(ts), sqlQuery)
+	return gensql.Select[session.OnlineSession](ctx, SqlxTx(ts), sqlQuery)
 }
 
 // SaveChunkList сохранить чанки по клиентской сессии
-func (r *sessionRepository) SaveChunkList(ts transaction.Session, chunkList []session.Chunk) (err error) {
+func (r *sessionRepository) SaveChunkList(
+	ctx context.Context,
+	ts transaction.Session,
+	chunkList []session.Chunk,
+) (err error) {
 	var stmt *sqlx.NamedStmt
 
-	if stmt, err = SqlxTx(ts).PrepareNamed(`
+	if stmt, err = SqlxTx(ts).PrepareNamedContext(ctx, `
 		insert into chunk (sess_id, channel_id, upload, download)
 		values (:sess_id, :channel_id, :upload, :download)
 	`); err != nil {
@@ -38,7 +47,7 @@ func (r *sessionRepository) SaveChunkList(ts transaction.Session, chunkList []se
 	defer stmt.Close()
 
 	for _, chunk := range chunkList {
-		if _, err = stmt.Exec(&chunk); err != nil {
+		if _, err = stmt.ExecContext(ctx, &chunk); err != nil {
 			return err
 		}
 	}

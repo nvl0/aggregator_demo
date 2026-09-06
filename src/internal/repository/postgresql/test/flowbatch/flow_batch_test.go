@@ -1,6 +1,7 @@
 package flowbatch_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -35,48 +36,48 @@ func TestFlowBatch(t *testing.T) {
 	// вся проверка идет внутри одной транзакции, которая откатывается в конце,
 	// поэтому чистить таблицу отдельно не нужно
 	ts := transaction.NewSQLSession(db)
-	r.NoError(ts.Start())
+	r.NoError(ts.Start(context.Background()))
 	defer ts.Rollback()
 
 	t.Run("пустой чекпоинт не является ошибкой", func(_ *testing.T) {
-		data, errLoad := repo.LoadCommittedFileNames(ts, nasIP)
+		data, errLoad := repo.LoadCommittedFileNames(context.Background(), ts, nasIP)
 		r.NoError(errLoad)
 		r.Empty(data)
 	})
 
 	t.Run("сохранение имен", func(t *testing.T) {
-		r.NoError(repo.SaveFileNames(ts, nasIP, []string{fileName1, fileName2}))
-		r.NoError(repo.SaveFileNames(ts, otherNasIP, []string{fileName1}))
+		r.NoError(repo.SaveFileNames(context.Background(), ts, nasIP, []string{fileName1, fileName2}))
+		r.NoError(repo.SaveFileNames(context.Background(), ts, otherNasIP, []string{fileName1}))
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errLoad := repo.LoadCommittedFileNames(ts, nasIP)
+			data, errLoad := repo.LoadCommittedFileNames(context.Background(), ts, nasIP)
 			r.NoError(errLoad)
 			r.Equal(map[string]bool{fileName1: true, fileName2: true}, data)
 		})
 
 		t.Run("повторное сохранение тех же имен не является ошибкой", func(_ *testing.T) {
-			r.NoError(repo.SaveFileNames(ts, nasIP, []string{fileName1, fileName2}))
+			r.NoError(repo.SaveFileNames(context.Background(), ts, nasIP, []string{fileName1, fileName2}))
 
-			data, errLoad := repo.LoadCommittedFileNames(ts, nasIP)
+			data, errLoad := repo.LoadCommittedFileNames(context.Background(), ts, nasIP)
 			r.NoError(errLoad)
 			r.Len(data, 2)
 		})
 
 		t.Run("пустой список имен не является ошибкой", func(_ *testing.T) {
-			r.NoError(repo.SaveFileNames(ts, nasIP, nil))
+			r.NoError(repo.SaveFileNames(context.Background(), ts, nasIP, nil))
 		})
 	})
 
 	t.Run("удаление по nas_ip", func(t *testing.T) {
-		r.NoError(repo.RemoveByNasIP(ts, nasIP))
+		r.NoError(repo.RemoveByNasIP(context.Background(), ts, nasIP))
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errLoad := repo.LoadCommittedFileNames(ts, nasIP)
+			data, errLoad := repo.LoadCommittedFileNames(context.Background(), ts, nasIP)
 			r.NoError(errLoad)
 			r.Empty(data)
 
 			// записи других nas_ip удаление не затрагивает
-			otherData, errOther := repo.LoadCommittedFileNames(ts, otherNasIP)
+			otherData, errOther := repo.LoadCommittedFileNames(context.Background(), ts, otherNasIP)
 			r.NoError(errOther)
 			r.Equal(map[string]bool{fileName1: true}, otherData)
 		})

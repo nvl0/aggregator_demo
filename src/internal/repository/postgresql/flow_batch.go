@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"context"
 	"errors"
 
 	"aggregator/src/internal/entity/global"
@@ -20,6 +21,7 @@ func NewFlowBatchRepository() repository.FlowBatch {
 
 // LoadCommittedFileNames загрузить имена закоммиченных flow файлов по nas_ip
 func (r *flowBatchRepository) LoadCommittedFileNames(
+	ctx context.Context,
 	ts transaction.Session,
 	nasIP string,
 ) (map[string]bool, error) {
@@ -28,7 +30,7 @@ func (r *flowBatchRepository) LoadCommittedFileNames(
 		from flow_batch fb
 		where fb.nas_ip = $1`
 
-	fileNameList, err := gensql.Select[string](SqlxTx(ts), sqlQuery, nasIP)
+	fileNameList, err := gensql.Select[string](ctx, SqlxTx(ts), sqlQuery, nasIP)
 	switch {
 	case err == nil:
 	case errors.Is(err, global.ErrNoData):
@@ -48,6 +50,7 @@ func (r *flowBatchRepository) LoadCommittedFileNames(
 
 // SaveFileNames сохранить имена flow файлов в чекпоинт
 func (r *flowBatchRepository) SaveFileNames(
+	ctx context.Context,
 	ts transaction.Session,
 	nasIP string,
 	fileNameList []string,
@@ -60,7 +63,7 @@ func (r *flowBatchRepository) SaveFileNames(
 
 	// повторная запись уже известного имени не должна ломать транзакцию:
 	// в чекпоинт пишется весь список файлов из tmp, включая закоммиченные ранее
-	if stmt, err = SqlxTx(ts).Preparex(`
+	if stmt, err = SqlxTx(ts).PreparexContext(ctx, `
 		insert into flow_batch (nas_ip, file_name)
 		values ($1, $2)
 		on conflict (nas_ip, file_name) do nothing
@@ -70,7 +73,7 @@ func (r *flowBatchRepository) SaveFileNames(
 	defer func() { _ = stmt.Close() }()
 
 	for _, fileName := range fileNameList {
-		if _, err = stmt.Exec(nasIP, fileName); err != nil {
+		if _, err = stmt.ExecContext(ctx, nasIP, fileName); err != nil {
 			return err
 		}
 	}
@@ -79,8 +82,8 @@ func (r *flowBatchRepository) SaveFileNames(
 }
 
 // RemoveByNasIP удалить чекпоинт по nas_ip
-func (r *flowBatchRepository) RemoveByNasIP(ts transaction.Session, nasIP string) error {
-	_, err := SqlxTx(ts).Exec(`
+func (r *flowBatchRepository) RemoveByNasIP(ctx context.Context, ts transaction.Session, nasIP string) error {
+	_, err := SqlxTx(ts).ExecContext(ctx, `
 		delete from flow_batch
 		where nas_ip = $1`, nasIP)
 

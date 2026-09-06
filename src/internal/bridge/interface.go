@@ -1,6 +1,8 @@
 package bridge
 
 import (
+	"context"
+
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
@@ -13,12 +15,12 @@ type Flow interface {
 }
 
 type Session interface {
-	LoadOnlineSessionMap(ts transaction.Session) (
+	LoadOnlineSessionMap(ctx context.Context, ts transaction.Session) (
 		sessionMap map[session.NasIP][]session.OnlineSession, err error)
 }
 
 type Channel interface {
-	LoadChannelMap(ts transaction.Session) (
+	LoadChannelMap(ctx context.Context, ts transaction.Session) (
 		channelMap map[channel.ID]bool, err error)
 }
 
@@ -33,6 +35,6 @@ type Traffic interface {
 }
 
 type Aggregator interface {
-	Aggregate(nasIP string, sessionList []session.OnlineSession,
+	Aggregate(ctx context.Context, nasIP string, sessionList []session.OnlineSession,
 		channelMap map[channel.ID]bool)
 }
