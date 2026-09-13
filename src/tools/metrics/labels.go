@@ -58,10 +58,8 @@ const (
 type NASPhase string
 
 const (
-	// NASPhasePrepareFlow подготовка flow
-	NASPhasePrepareFlow NASPhase = "prepare_flow"
-	// NASPhaseParseFlow парсинг flow и подсчет трафика
-	NASPhaseParseFlow NASPhase = "parse_flow"
+	// NASPhaseStreamFlow потоковый разбор flow: чтение и подсчет трафика
+	NASPhaseStreamFlow NASPhase = "stream_flow"
 	// NASPhaseSiftTraffic привязка трафика к сессиям
 	NASPhaseSiftTraffic NASPhase = "sift_traffic"
 	// NASPhaseSaveChunks сохранение чанков и чекпоинта в бд
@@ -89,7 +87,7 @@ var (
 		NASStageCheckpoint, NASStagePrepare, NASStageParse, NASStageSift, NASStageSave,
 	}
 	allNASPhases = []NASPhase{
-		NASPhasePrepareFlow, NASPhaseParseFlow, NASPhaseSiftTraffic, NASPhaseSaveChunks,
+		NASPhaseStreamFlow, NASPhaseSiftTraffic, NASPhaseSaveChunks,
 	}
 	allDirections = []Direction{DirectionDownload, DirectionUpload}
 )

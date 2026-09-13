@@ -20,44 +20,44 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockFlowPreparer is a mock of FlowPreparer interface.
-type MockFlowPreparer struct {
+// MockFlowStreamer is a mock of FlowStreamer interface.
+type MockFlowStreamer struct {
 	ctrl     *gomock.Controller
-	recorder *MockFlowPreparerMockRecorder
+	recorder *MockFlowStreamerMockRecorder
 	isgomock struct{}
 }
 
-// MockFlowPreparerMockRecorder is the mock recorder for MockFlowPreparer.
-type MockFlowPreparerMockRecorder struct {
-	mock *MockFlowPreparer
+// MockFlowStreamerMockRecorder is the mock recorder for MockFlowStreamer.
+type MockFlowStreamerMockRecorder struct {
+	mock *MockFlowStreamer
 }
 
-// NewMockFlowPreparer creates a new mock instance.
-func NewMockFlowPreparer(ctrl *gomock.Controller) *MockFlowPreparer {
-	mock := &MockFlowPreparer{ctrl: ctrl}
-	mock.recorder = &MockFlowPreparerMockRecorder{mock}
+// NewMockFlowStreamer creates a new mock instance.
+func NewMockFlowStreamer(ctrl *gomock.Controller) *MockFlowStreamer {
+	mock := &MockFlowStreamer{ctrl: ctrl}
+	mock.recorder = &MockFlowStreamerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockFlowPreparer) EXPECT() *MockFlowPreparerMockRecorder {
+func (m *MockFlowStreamer) EXPECT() *MockFlowStreamerMockRecorder {
 	return m.recorder
 }
 
-// PrepareFlow mocks base method.
-func (m *MockFlowPreparer) PrepareFlow(dirName string, skipFileNames map[string]bool) (string, []string, error) {
+// StreamFlow mocks base method.
+func (m *MockFlowStreamer) StreamFlow(dirName string, skipFileNames map[string]bool, onLine func(string) error) ([]string, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareFlow", dirName, skipFileNames)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].([]string)
+	ret := m.ctrl.Call(m, "StreamFlow", dirName, skipFileNames, onLine)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// PrepareFlow indicates an expected call of PrepareFlow.
-func (mr *MockFlowPreparerMockRecorder) PrepareFlow(dirName, skipFileNames any) *gomock.Call {
+// StreamFlow indicates an expected call of StreamFlow.
+func (mr *MockFlowStreamerMockRecorder) StreamFlow(dirName, skipFileNames, onLine any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareFlow", reflect.TypeOf((*MockFlowPreparer)(nil).PrepareFlow), dirName, skipFileNames)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamFlow", reflect.TypeOf((*MockFlowStreamer)(nil).StreamFlow), dirName, skipFileNames, onLine)
 }
 
 // MockSessionLoader is a mock of SessionLoader interface.
@@ -162,19 +162,18 @@ func (m *MockTrafficProcessor) EXPECT() *MockTrafficProcessorMockRecorder {
 	return m.recorder
 }
 
-// ParseFlow mocks base method.
-func (m *MockTrafficProcessor) ParseFlow(channelMap map[channel.ID]bool, flow string) (map[session.IP]map[channel.ID]traffic.Traffic, error) {
+// NewFlowAccumulator mocks base method.
+func (m *MockTrafficProcessor) NewFlowAccumulator(channelMap map[channel.ID]bool) *FlowAccumulator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ParseFlow", channelMap, flow)
-	ret0, _ := ret[0].(map[session.IP]map[channel.ID]traffic.Traffic)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "NewFlowAccumulator", channelMap)
+	ret0, _ := ret[0].(*FlowAccumulator)
+	return ret0
 }
 
-// ParseFlow indicates an expected call of ParseFlow.
-func (mr *MockTrafficProcessorMockRecorder) ParseFlow(channelMap, flow any) *gomock.Call {
+// NewFlowAccumulator indicates an expected call of NewFlowAccumulator.
+func (mr *MockTrafficProcessorMockRecorder) NewFlowAccumulator(channelMap any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseFlow", reflect.TypeOf((*MockTrafficProcessor)(nil).ParseFlow), channelMap, flow)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewFlowAccumulator", reflect.TypeOf((*MockTrafficProcessor)(nil).NewFlowAccumulator), channelMap)
 }
 
 // SiftTraffic mocks base method.

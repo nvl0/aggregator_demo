@@ -2,6 +2,7 @@ package traffic_test
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"aggregator/src/internal/entity/channel"
@@ -22,7 +23,7 @@ var (
 	testLogger = logger.NewDiscard()
 )
 
-func TestParseFlow(t *testing.T) {
+func TestAccumulateFlow(t *testing.T) {
 	r := require.New(t)
 
 	type fields struct {
@@ -186,7 +187,13 @@ also-broken,127.0.0.2,127.0.0.1`,
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
-			data, errParse := ui.Usecase.Traffic.ParseFlow(tt.args.channelMap, tt.args.flow)
+			acc := ui.Usecase.Traffic.NewFlowAccumulator(tt.args.channelMap)
+			// строки подаются по одной, ровно как их отдает StreamFlow
+			for _, line := range strings.Split(tt.args.flow, "\n") {
+				r.NoError(acc.AccumulateLine(line))
+			}
+
+			data, errParse := acc.Result()
 			r.Equal(tt.err, errParse)
 			r.Equal(tt.data, data)
 		})

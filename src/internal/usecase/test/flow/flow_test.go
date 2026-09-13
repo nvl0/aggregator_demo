@@ -16,7 +16,7 @@ var (
 	testLogger = logger.NewDiscard()
 )
 
-func TestPrepareFlow(t *testing.T) {
+func TestStreamFlow(t *testing.T) {
 	type fields struct {
 		ri rimport.TestRepositoryImports
 		ts *transaction.MockSession
@@ -30,7 +30,8 @@ func TestPrepareFlow(t *testing.T) {
 		dirName  = "test_dir"
 		fileName = "ft-test_file"
 		oldFile  = "ft-old_file"
-		output   = "test_output"
+		line1    = "4123,127.0.0.1,127.0.0.2"
+		flowSize = 25
 	)
 
 	tests := []struct {
@@ -38,7 +39,8 @@ func TestPrepareFlow(t *testing.T) {
 		prepare          func(f *fields)
 		args             args
 		err              error
-		data             string
+		wantLines        []string
+		wantFlowSize     int
 		wantFileNameList []string
 	}{
 		{
@@ -51,16 +53,25 @@ func TestPrepareFlow(t *testing.T) {
 						ReadFileNamesInFlowDir(dirName).Return(fileNameListInDir, nil),
 					f.ri.MockRepository.Flow.EXPECT().
 						MoveFlowToTempDir(dirName, fileName).Return(nil),
+					// репозиторий отдает строку в callback, который пришел сверху
 					f.ri.MockRepository.Flow.EXPECT().
-						ReadFlow(dirName, map[string]bool(nil)).
-						Return(output, []string{fileName}, nil),
+						StreamFlow(dirName, map[string]bool(nil), gomock.Any()).
+						DoAndReturn(func(_ string, _ map[string]bool,
+							onLine func(line string) error) ([]string, int, error) {
+							if err := onLine(line1); err != nil {
+								return nil, 0, err
+							}
+
+							return []string{fileName}, flowSize, nil
+						}),
 				)
 			},
 			args: args{
 				dirName: dirName,
 			},
 			err:              nil,
-			data:             output,
+			wantLines:        []string{line1},
+			wantFlowSize:     flowSize,
 			wantFileNameList: []string{fileName},
 		},
 		{
@@ -75,8 +86,15 @@ func TestPrepareFlow(t *testing.T) {
 					f.ri.MockRepository.Flow.EXPECT().
 						MoveFlowToTempDir(dirName, fileName).Return(nil),
 					f.ri.MockRepository.Flow.EXPECT().
-						ReadFlow(dirName, skipFileNames).
-						Return(output, []string{oldFile, fileName}, nil),
+						StreamFlow(dirName, skipFileNames, gomock.Any()).
+						DoAndReturn(func(_ string, _ map[string]bool,
+							onLine func(line string) error) ([]string, int, error) {
+							if err := onLine(line1); err != nil {
+								return nil, 0, err
+							}
+
+							return []string{oldFile, fileName}, flowSize, nil
+						}),
 				)
 			},
 			args: args{
@@ -84,7 +102,8 @@ func TestPrepareFlow(t *testing.T) {
 				skipFileNames: map[string]bool{oldFile: true},
 			},
 			err:              nil,
-			data:             output,
+			wantLines:        []string{line1},
+			wantFlowSize:     flowSize,
 			wantFileNameList: []string{oldFile, fileName},
 		},
 	}
@@ -105,9 +124,17 @@ func TestPrepareFlow(t *testing.T) {
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
-			data, fileNameList, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName, tt.args.skipFileNames)
+			var gotLines []string
+
+			fileNameList, flowSizeGot, err := ui.Usecase.Flow.StreamFlow(tt.args.dirName,
+				tt.args.skipFileNames, func(line string) error {
+					gotLines = append(gotLines, line)
+
+					return nil
+				})
 			r.Equal(tt.err, err)
-			r.Equal(tt.data, data)
+			r.Equal(tt.wantLines, gotLines)
+			r.Equal(tt.wantFlowSize, flowSizeGot)
 			r.Equal(tt.wantFileNameList, fileNameList)
 		})
 	}

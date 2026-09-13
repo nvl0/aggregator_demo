@@ -9,10 +9,10 @@ import (
 	"aggregator/src/internal/transaction"
 )
 
-// FlowPreparer подготовка flow, реализация — *FlowUsecase
-type FlowPreparer interface {
-	PrepareFlow(dirName string, skipFileNames map[string]bool) (
-		flow string, fileNameList []string, err error)
+// FlowStreamer подготовка и потоковое чтение flow, реализация — *FlowUsecase
+type FlowStreamer interface {
+	StreamFlow(dirName string, skipFileNames map[string]bool, onLine func(line string) error) (
+		fileNameList []string, flowSize int, err error)
 }
 
 // SessionLoader загрузка онлайн сессий, реализация — *SessionUsecase
@@ -29,8 +29,7 @@ type ChannelLoader interface {
 
 // TrafficProcessor разбор flow и просеивание трафика, реализация — *TrafficUsecase
 type TrafficProcessor interface {
-	ParseFlow(channelMap map[channel.ID]bool, flow string) (
-		trafficMap map[session.IP]map[channel.ID]traffic.Traffic, err error)
+	NewFlowAccumulator(channelMap map[channel.ID]bool) *FlowAccumulator
 	SiftTraffic(channelMap map[channel.ID]bool,
 		trafficMap map[session.IP]map[channel.ID]traffic.Traffic,
 		sessionList []session.OnlineSession) (chunkList []session.Chunk, err error)

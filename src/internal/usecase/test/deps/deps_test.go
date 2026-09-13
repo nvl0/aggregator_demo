@@ -18,8 +18,8 @@ func TestUsecaseImplementsDeps(t *testing.T) {
 		impl     any
 	}{
 		{
-			name:     "FlowUsecase реализует FlowPreparer",
-			ifacePtr: (*usecase.FlowPreparer)(nil),
+			name:     "FlowUsecase реализует FlowStreamer",
+			ifacePtr: (*usecase.FlowStreamer)(nil),
 			impl:     new(usecase.FlowUsecase),
 		},
 		{

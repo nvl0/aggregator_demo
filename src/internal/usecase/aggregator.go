@@ -35,7 +35,7 @@ type AggregatorUsecase struct {
 	// poolSize размер пула воркеров агрегации
 	poolSize int
 	// прямые зависимости на соседние usecase вместо индирекции через bridge
-	flow    FlowPreparer
+	flow    FlowStreamer
 	session SessionLoader
 	channel ChannelLoader
 	traffic TrafficProcessor
@@ -46,7 +46,7 @@ type AggregatorUsecase struct {
 // AggregatorDeps зависимости агрегатора на соседние usecase.
 // Структура-параметр вместо четырех позиционных аргументов конструктора
 type AggregatorDeps struct {
-	Flow    FlowPreparer
+	Flow    FlowStreamer
 	Session SessionLoader
 	Channel ChannelLoader
 	Traffic TrafficProcessor
@@ -284,19 +284,21 @@ func (u *AggregatorUsecase) Aggregate(
 		return
 	}
 
-	m.Start(fmt.Sprintf("%s подготовка flow", nasIP))
-	// prepareFlow фиксирует длительность фазы, в том числе на ошибке
-	flow, fileNameList, err := u.prepareFlow(nasIP, committedFileNames)
+	acc := u.traffic.NewFlowAccumulator(channelMap)
+
+	streamLogName := fmt.Sprintf("%s потоковый разбор flow", nasIP)
+	m.Start(streamLogName)
+	// streamFlow фиксирует длительность фазы, в том числе на ошибке
+	fileNameList, flowSize, err := u.streamFlow(nasIP, committedFileNames, acc.AccumulateLine)
 	if err != nil {
 		u.nasFailed(metrics.NASStagePrepare)
 
 		return
 	}
-	m.Stop(fmt.Sprintf("%s подготовка flow", nasIP))
-	u.log.DebugContext(ctx, "размер flow", "size", len([]rune(flow)), logFieldNasIP, nasIP)
+	m.Stop(streamLogName)
 
-	// метрика берет длину в байтах, а не в рунах
-	u.metrics.ObserveFlowSize(len(flow))
+	u.log.DebugContext(ctx, "размер flow", "size", flowSize, logFieldNasIP, nasIP)
+	u.metrics.ObserveFlowSize(flowSize)
 
 	// весь tmp состоит из уже закоммиченных файлов: предыдущий цикл упал
 	// между коммитом чанков и очисткой tmp. Считать нечего, нужно лишь завершить очистку
@@ -310,11 +312,7 @@ func (u *AggregatorUsecase) Aggregate(
 		return
 	}
 
-	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
-	m.Start(parseFlowLogName)
-	parseStart := time.Now()
-	trafficMap, err := u.traffic.ParseFlow(channelMap, flow)
-	u.metrics.ObserveNASPhase(metrics.NASPhaseParseFlow, time.Since(parseStart))
+	trafficMap, err := acc.Result()
 
 	switch {
 	case errors.Is(err, global.ErrNoData):
@@ -338,7 +336,6 @@ func (u *AggregatorUsecase) Aggregate(
 
 		return
 	}
-	m.Stop(parseFlowLogName)
 	u.log.DebugContext(ctx, "количество трафика", "count", len(trafficMap), logFieldNasIP, nasIP)
 
 	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
@@ -391,17 +388,18 @@ func (u *AggregatorUsecase) nasFailed(stage metrics.NASStage) {
 	u.metrics.IncNAS(metrics.NASResultError)
 }
 
-// prepareFlow подготовка flow с фиксацией длительности фазы.
+// streamFlow потоковый разбор flow с фиксацией длительности фазы.
 // фаза пишется и на ошибке
-func (u *AggregatorUsecase) prepareFlow(
+func (u *AggregatorUsecase) streamFlow(
 	nasIP string,
 	committedFileNames map[string]bool,
-) (flow string, fileNameList []string, err error) {
+	onLine func(line string) error,
+) (fileNameList []string, flowSize int, err error) {
 	start := time.Now()
-	flow, fileNameList, err = u.flow.PrepareFlow(nasIP, committedFileNames)
-	u.metrics.ObserveNASPhase(metrics.NASPhasePrepareFlow, time.Since(start))
+	fileNameList, flowSize, err = u.flow.StreamFlow(nasIP, committedFileNames, onLine)
+	u.metrics.ObserveNASPhase(metrics.NASPhaseStreamFlow, time.Since(start))
 
-	return flow, fileNameList, err
+	return fileNameList, flowSize, err
 }
 
 // commitChunks сохранение чанков с фиксацией метрик этапа
