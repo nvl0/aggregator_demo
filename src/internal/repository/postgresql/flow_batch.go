@@ -30,7 +30,7 @@ func (r *flowBatchRepository) LoadCommittedFileNames(
 		from flow_batch fb
 		where fb.nas_ip = $1`
 
-	fileNameList, err := gensql.Select[string](ctx, SqlxTx(ts), sqlQuery, nasIP)
+	fileNameList, err := gensql.Select[string](ctx, ts.Tx(), sqlQuery, nasIP)
 	switch {
 	case err == nil:
 	case errors.Is(err, global.ErrNoData):
@@ -63,7 +63,7 @@ func (r *flowBatchRepository) SaveFileNames(
 
 	// повторная запись уже известного имени не должна ломать транзакцию:
 	// в чекпоинт пишется весь список файлов из tmp, включая закоммиченные ранее
-	if stmt, err = SqlxTx(ts).PreparexContext(ctx, `
+	if stmt, err = ts.Tx().PreparexContext(ctx, `
 		insert into flow_batch (nas_ip, file_name)
 		values ($1, $2)
 		on conflict (nas_ip, file_name) do nothing
@@ -83,7 +83,7 @@ func (r *flowBatchRepository) SaveFileNames(
 
 // RemoveByNasIP удалить чекпоинт по nas_ip
 func (r *flowBatchRepository) RemoveByNasIP(ctx context.Context, ts transaction.Session, nasIP string) error {
-	_, err := SqlxTx(ts).ExecContext(ctx, `
+	_, err := ts.Tx().ExecContext(ctx, `
 		delete from flow_batch
 		where nas_ip = $1`, nasIP)
 

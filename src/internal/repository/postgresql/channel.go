@@ -26,5 +26,5 @@ func (r *channelRepository) LoadChannelList(
 		from channel c
 		order by c.channel_id`
 
-	return gensql.Select[channel.Channel](ctx, SqlxTx(ts), sqlQuery)
+	return gensql.Select[channel.Channel](ctx, ts.Tx(), sqlQuery)
 }

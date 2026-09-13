@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	sqlx "github.com/jmoiron/sqlx"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -83,10 +84,10 @@ func (mr *MockSessionMockRecorder) Start(ctx any) *gomock.Call {
 }
 
 // Tx mocks base method.
-func (m *MockSession) Tx() any {
+func (m *MockSession) Tx() *sqlx.Tx {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Tx")
-	ret0, _ := ret[0].(any)
+	ret0, _ := ret[0].(*sqlx.Tx)
 	return ret0
 }
 

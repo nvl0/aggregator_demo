@@ -27,7 +27,7 @@ func (r *sessionRepository) LoadOnlineSessionList(
 		select o.ip, o.sess_id, o.nas_ip
 		from online_session o`
 
-	return gensql.Select[session.OnlineSession](ctx, SqlxTx(ts), sqlQuery)
+	return gensql.Select[session.OnlineSession](ctx, ts.Tx(), sqlQuery)
 }
 
 // SaveChunkList сохранить чанки по клиентской сессии
@@ -38,7 +38,7 @@ func (r *sessionRepository) SaveChunkList(
 ) (err error) {
 	var stmt *sqlx.NamedStmt
 
-	if stmt, err = SqlxTx(ts).PrepareNamedContext(ctx, `
+	if stmt, err = ts.Tx().PrepareNamedContext(ctx, `
 		insert into chunk (sess_id, channel_id, upload, download)
 		values (:sess_id, :channel_id, :upload, :download)
 	`); err != nil {
