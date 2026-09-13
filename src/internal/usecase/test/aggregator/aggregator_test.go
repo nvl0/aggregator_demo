@@ -559,6 +559,51 @@ also-broken,127.0.0.2,127.0.0.1`
 				channelMap:  channelMap,
 			},
 		},
+		{
+			name: "ошибка StreamFlow в середине потока, обработка останавливается",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+
+				// одна транзакция: только загрузка чекпоинта.
+				// StreamFlow падает в середине потока — до SiftTraffic и
+				// записи чекпоинта дело не доходит
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(1)
+				f.ts.EXPECT().Rollback().Return(nil).Times(1)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(func(_ string, _ map[string]bool, onLine func(line string) error) (
+							[]string, int, error) {
+							lines := strings.Split(flowStr, "\n")
+
+							// пара строк успешно учтена аккумулятором,
+							// затем поток обрывается ошибкой ввода-вывода
+							if err := onLine(lines[0]); err != nil {
+								return nil, 0, err
+							}
+							if err := onLine(lines[1]); err != nil {
+								return nil, 0, err
+							}
+
+							return nil, 0, errors.New("ошибка чтения flow в середине потока")
+						}),
+				)
+
+				// SiftTraffic / SaveChunkList / RemoveOld / RemoveByNasIP не ожидаются:
+				// обработка nas_ip прерывается сразу после ошибки StreamFlow
+			},
+			args: args{
+				ctx:         context.Background(),
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
 	}
 
 	for _, tt := range tests {

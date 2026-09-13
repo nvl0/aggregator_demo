@@ -1,4 +1,5 @@
 *.log
+/bin/
 app/bin/*
 !app/bin/.gitkeep
 app/flow/*

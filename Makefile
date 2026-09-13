@@ -22,8 +22,8 @@ lint: ## golangci-lint по всему модулю (docker, версия как
 	docker run --rm -v $(CURDIR):/app -w /app/src \
 		golangci/golangci-lint:$(GOLANGCI_VERSION) golangci-lint run
 
-test-unit: ## юнит-тесты usecase и tools
-	cd $(SRC) && $(GOTEST) ./internal/usecase/test/... ./tools/... ./external/...
+test-unit: ## юнит-тесты usecase, tools и config
+	cd $(SRC) && $(GOTEST) ./internal/usecase/test/... ./tools/... ./external/... ./config/...
 
 test-storage: ## тесты файлового репозитория
 	cd $(SRC) && $(GOTEST) ./internal/repository/storage/test/...
