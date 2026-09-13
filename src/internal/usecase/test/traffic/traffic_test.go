@@ -48,106 +48,13 @@ func TestParseFlow(t *testing.T) {
 	sranger.Insert(cidranger.NewBasicRangerEntry(*network))
 
 	tests := []struct {
-		name    string
-		prepare func(f *fields)
-		args    args
-		err     error
-		data    map[session.IP]map[channel.ID]traffic.Traffic
+		name string
+		args args
+		err  error
+		data map[session.IP]map[channel.ID]traffic.Traffic
 	}{
 		{
 			name: "подсчет internal сети",
-			prepare: func(f *fields) {
-				channelMap := map[channel.ID]bool{
-					channel.Internal: true,
-					channel.External: false,
-				}
-
-				gomock.InOrder(
-					// 1 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(132), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 132,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(132), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Upload: 132,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 2 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(456), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 456,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(456), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Upload: 456,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 3 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(234), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   132,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(234), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 4 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(345), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 801,
-								Upload:   366,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(345), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {},
-						},
-					),
-				)
-			},
 			args: args{
 				channelMap: map[channel.ID]bool{
 					channel.Internal: true,
@@ -159,79 +66,25 @@ func TestParseFlow(t *testing.T) {
 345,127.0.0.2,127.0.0.1`,
 			},
 			err: nil,
+			// выключенный external в мапку не попадает:
+			// createNewEmptyTrafficMap заводит запись только по включенным каналам
 			data: map[session.IP]map[channel.ID]traffic.Traffic{
 				ip1: {
 					channel.Internal: {
 						Download: 366,
 						Upload:   801,
 					},
-					channel.External: {},
 				},
 				ip2: {
 					channel.Internal: {
 						Download: 801,
 						Upload:   366,
 					},
-					channel.External: {},
 				},
 			},
 		},
 		{
 			name: "подсчет external сети",
-			prepare: func(f *fields) {
-				channelMap := map[channel.ID]bool{
-					channel.External: true,
-					channel.Internal: false,
-				}
-
-				gomock.InOrder(
-					// 1 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(534), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.External: {
-								Download: 534,
-							},
-							channel.Internal: {},
-						},
-					),
-
-					// 2 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(347), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.External: {
-								Upload: 347,
-							},
-							channel.Internal: {},
-						},
-					),
-
-					// 3 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(7856), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.External: {
-								Download: 8390,
-								Upload:   347,
-							},
-							channel.Internal: {},
-						},
-					),
-
-					// 4 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(221), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.External: {
-								Download: 8390,
-								Upload:   568,
-							},
-							channel.Internal: {},
-						},
-					),
-				)
-			},
 			args: args{
 				channelMap: map[channel.ID]bool{
 					channel.External: true,
@@ -249,162 +102,11 @@ func TestParseFlow(t *testing.T) {
 						Download: 8390,
 						Upload:   568,
 					},
-					channel.Internal: {},
 				},
 			},
 		},
 		{
 			name: "комплексный подсчет со всех сетей",
-			prepare: func(f *fields) {
-				channelMap := map[channel.ID]bool{
-					channel.Internal: true,
-					channel.External: true,
-				}
-
-				gomock.InOrder(
-					// 1 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(132), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 132,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(132), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Upload: 132,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 2 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(456), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 456,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(456), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Upload: 456,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 3 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(234), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   132,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(234), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 4 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(345), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 801,
-								Upload:   366,
-							},
-							channel.External: {},
-						},
-					),
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(345), channelMap, channel.Internal).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {},
-						},
-					),
-
-					// 5 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(534), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {
-								Download: 534,
-							},
-						},
-					),
-
-					// 6 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(347), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {
-								Upload: 347,
-							},
-						},
-					),
-
-					// 7 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficDownload(7856), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {
-								Download: 8390,
-								Upload:   347,
-							},
-						},
-					),
-
-					// 8 цикл
-					f.bi.TestBridge.Traffic.EXPECT().CountTraffic(gomock.Any(),
-						traffic.NewTrafficUpload(221), channelMap, channel.External).Return(
-						map[channel.ID]traffic.Traffic{
-							channel.Internal: {
-								Download: 366,
-								Upload:   801,
-							},
-							channel.External: {
-								Download: 8390,
-								Upload:   568,
-							},
-						},
-					),
-				)
-			},
 			args: args{
 				channelMap: map[channel.ID]bool{
 					channel.Internal: true,
@@ -483,9 +185,6 @@ also-broken,127.0.0.2,127.0.0.1`,
 				ri: rimport.NewTestRepositoryImports(ctrl),
 				ts: transaction.NewMockSession(ctrl),
 				bi: bimport.NewTestBridgeImports(ctrl),
-			}
-			if tt.prepare != nil {
-				tt.prepare(&f)
 			}
 
 			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)

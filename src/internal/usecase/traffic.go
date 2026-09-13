@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
@@ -23,20 +22,17 @@ const flowRowFieldCount = 3
 type TrafficUsecase struct {
 	log *slog.Logger
 	rimport.RepositoryImports
-	*bimport.BridgeImports
 	internalNet cidranger.Ranger
 }
 
 func NewTrafficUsecase(
 	log *slog.Logger,
 	ri rimport.RepositoryImports,
-	bi *bimport.BridgeImports,
 	internalNet cidranger.Ranger,
 ) *TrafficUsecase {
 	return &TrafficUsecase{
 		log:               log,
 		RepositoryImports: ri,
-		BridgeImports:     bi,
 		internalNet:       internalNet,
 	}
 }
@@ -115,7 +111,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		case isSrcInternal && isDstInternal:
 
 			// запись получателю в download
-			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+			trafficMap[record.SrcIPkey()] = u.CountTraffic(
 				trafficMap[record.SrcIPkey()],
 				traffic.NewTrafficDownload(record.ByteSize),
 				channelMap,
@@ -123,7 +119,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 			)
 
 			// запись отправителю в upload
-			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+			trafficMap[record.DstIPkey()] = u.CountTraffic(
 				trafficMap[record.DstIPkey()],
 				traffic.NewTrafficUpload(record.ByteSize),
 				channelMap,
@@ -134,7 +130,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		case isSrcInternal:
 
 			// отправитель во внешней сети
-			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
+			trafficMap[record.SrcIPkey()] = u.CountTraffic(
 				trafficMap[record.SrcIPkey()],
 				traffic.NewTrafficDownload(record.ByteSize),
 				channelMap,
@@ -145,7 +141,7 @@ func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr strin
 		case isDstInternal:
 
 			// получатель во внешней сети
-			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
+			trafficMap[record.DstIPkey()] = u.CountTraffic(
 				trafficMap[record.DstIPkey()],
 				traffic.NewTrafficUpload(record.ByteSize),
 				channelMap,

@@ -50,7 +50,7 @@ func NewUsecaseImports(
 			Flow:       usecase.NewFlowUsecase(logger.NewUsecaseLogger(log, "flow"), ri),
 			Session:    usecase.NewSessionUsecase(logger.NewUsecaseLogger(log, "session"), ri),
 			Channel:    usecase.NewChannelUsecase(logger.NewUsecaseLogger(log, "channel"), ri),
-			Traffic:    usecase.NewTrafficUsecase(logger.NewUsecaseLogger(log, "traffic"), ri, bi, internalNet),
+			Traffic:    usecase.NewTrafficUsecase(logger.NewUsecaseLogger(log, "traffic"), ri, internalNet),
 			Aggregator: usecase.NewAggregatorUsecase(logger.NewUsecaseLogger(log, "aggregator"), ri, bi, m),
 		},
 		BridgeImports: bi,
