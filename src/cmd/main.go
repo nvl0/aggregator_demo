@@ -1,7 +1,6 @@
 package main
 
 import (
-	"aggregator/src/bimport"
 	"aggregator/src/config"
 	"aggregator/src/external"
 	"aggregator/src/external/health"
@@ -69,17 +68,7 @@ func main() {
 
 	ri := rimport.NewRepositoryImports(conf, pgSessionManager)
 
-	bi := bimport.NewEmptyBridge()
-
-	ui := uimport.NewUsecaseImports(log, ri, bi, m)
-
-	bi.InitBridge(
-		ui.Usecase.Flow,
-		ui.Usecase.Session,
-		ui.Usecase.Channel,
-		ui.Usecase.Traffic,
-		ui.Usecase.Aggregator,
-	)
+	ui := uimport.NewUsecaseImports(log, ri, m)
 
 	external.NewCron(log, ui).Run(ctx)
 

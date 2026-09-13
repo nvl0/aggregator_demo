@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"aggregator/src/bimport"
 	"aggregator/src/config"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
@@ -197,16 +196,7 @@ func runCycle(conf config.Config, log *slog.Logger) (elapsed time.Duration, err 
 	}
 
 	ri := rimport.NewRepositoryImports(conf, transaction.NewSQLSessionManager(pgDB))
-	bi := bimport.NewEmptyBridge()
-	ui := uimport.NewUsecaseImports(log, ri, bi, nil)
-
-	bi.InitBridge(
-		ui.Usecase.Flow,
-		ui.Usecase.Session,
-		ui.Usecase.Channel,
-		ui.Usecase.Traffic,
-		ui.Usecase.Aggregator,
-	)
+	ui := uimport.NewUsecaseImports(log, ri, nil)
 
 	start := time.Now()
 	ui.Usecase.Aggregator.Start(context.Background())

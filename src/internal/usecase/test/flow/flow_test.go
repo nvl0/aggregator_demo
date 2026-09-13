@@ -3,7 +3,6 @@ package flow_test
 import (
 	"testing"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/transaction"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
@@ -20,7 +19,6 @@ var (
 func TestPrepareFlow(t *testing.T) {
 	type fields struct {
 		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
 		ts *transaction.MockSession
 	}
 	type args struct {
@@ -100,13 +98,12 @@ func TestPrepareFlow(t *testing.T) {
 			f := fields{
 				ri: rimport.NewTestRepositoryImports(ctrl),
 				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
 			}
 			if tt.prepare != nil {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
 			data, fileNameList, err := ui.Usecase.Flow.PrepareFlow(tt.args.dirName, tt.args.skipFileNames)
 			r.Equal(tt.err, err)

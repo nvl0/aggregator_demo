@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
@@ -35,15 +34,28 @@ type AggregatorUsecase struct {
 	log     *slog.Logger
 	// poolSize размер пула воркеров агрегации
 	poolSize int
+	// прямые зависимости на соседние usecase вместо индирекции через bridge
+	flow    FlowPreparer
+	session SessionLoader
+	channel ChannelLoader
+	traffic TrafficProcessor
 	//
 	rimport.RepositoryImports
-	*bimport.BridgeImports
+}
+
+// AggregatorDeps зависимости агрегатора на соседние usecase.
+// Структура-параметр вместо четырех позиционных аргументов конструктора
+type AggregatorDeps struct {
+	Flow    FlowPreparer
+	Session SessionLoader
+	Channel ChannelLoader
+	Traffic TrafficProcessor
 }
 
 func NewAggregatorUsecase(
 	log *slog.Logger,
 	ri rimport.RepositoryImports,
-	bi *bimport.BridgeImports,
+	deps AggregatorDeps,
 	m *metrics.Metrics,
 ) *AggregatorUsecase {
 	writer := measure.NewSlogWriter(log)
@@ -55,8 +67,11 @@ func NewAggregatorUsecase(
 		metrics:           m,
 		log:               log,
 		poolSize:          ri.Config.WorkerPoolSize(),
+		flow:              deps.Flow,
+		session:           deps.Session,
+		channel:           deps.Channel,
+		traffic:           deps.Traffic,
 		RepositoryImports: ri,
-		BridgeImports:     bi,
 	}
 
 	m.SetPoolSize(u.poolSize)
@@ -172,7 +187,7 @@ func (u *AggregatorUsecase) Start(ctx context.Context) {
 		// если контекст отменился во время ожидания свободного слота,
 		// рассылка оставшихся nas_ip прекращается
 		if !pool.Go(ctx, func() {
-			u.Bridge.Aggregator.Aggregate(ctx, nasIP, sessionList, channelMap)
+			u.Aggregate(ctx, nasIP, sessionList, channelMap)
 		}) {
 			u.log.DebugContext(ctx, "контекст отменен, рассылка оставшихся nas_ip прекращена")
 			break
@@ -213,7 +228,7 @@ func (u *AggregatorUsecase) loadChannelMap(ctx context.Context, chanChan chan<- 
 	u.measure.Start(chanLogName)
 	defer u.measure.Stop(chanLogName)
 
-	channelMap, err := u.Bridge.Channel.LoadChannelMap(ctx, ts)
+	channelMap, err := u.channel.LoadChannelMap(ctx, ts)
 	if err != nil {
 		u.log.ErrorContext(ctx, "не удалось загрузить мапку каналов, ошибка", "error", err)
 		return
@@ -240,7 +255,7 @@ func (u *AggregatorUsecase) loadOnlineSessionMap(
 	u.measure.Start(sessLogName)
 	defer u.measure.Stop(sessLogName)
 
-	sessionMap, err := u.Bridge.Session.LoadOnlineSessionMap(ctx, ts)
+	sessionMap, err := u.session.LoadOnlineSessionMap(ctx, ts)
 	if err != nil {
 		u.log.ErrorContext(ctx, "не удалось загрузить мапку онлайн сессий, ошибка", "error", err)
 		return
@@ -298,7 +313,7 @@ func (u *AggregatorUsecase) Aggregate(
 	parseFlowLogName := fmt.Sprintf("%s парсинг flow, подсчет трафика", nasIP)
 	m.Start(parseFlowLogName)
 	parseStart := time.Now()
-	trafficMap, err := u.Bridge.Traffic.ParseFlow(channelMap, flow)
+	trafficMap, err := u.traffic.ParseFlow(channelMap, flow)
 	u.metrics.ObserveNASPhase(metrics.NASPhaseParseFlow, time.Since(parseStart))
 
 	switch {
@@ -329,7 +344,7 @@ func (u *AggregatorUsecase) Aggregate(
 	siftTrafficLogName := fmt.Sprintf("%s привязка трафика к сессии", nasIP)
 	m.Start(siftTrafficLogName)
 	siftStart := time.Now()
-	chunkList, err := u.Bridge.Traffic.SiftTraffic(channelMap, trafficMap, sessionList)
+	chunkList, err := u.traffic.SiftTraffic(channelMap, trafficMap, sessionList)
 	u.metrics.ObserveNASPhase(metrics.NASPhaseSiftTraffic, time.Since(siftStart))
 
 	switch {
@@ -383,7 +398,7 @@ func (u *AggregatorUsecase) prepareFlow(
 	committedFileNames map[string]bool,
 ) (flow string, fileNameList []string, err error) {
 	start := time.Now()
-	flow, fileNameList, err = u.Bridge.Flow.PrepareFlow(nasIP, committedFileNames)
+	flow, fileNameList, err = u.flow.PrepareFlow(nasIP, committedFileNames)
 	u.metrics.ObserveNASPhase(metrics.NASPhasePrepareFlow, time.Since(start))
 
 	return flow, fileNameList, err

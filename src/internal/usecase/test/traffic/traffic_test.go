@@ -4,7 +4,6 @@ import (
 	"net"
 	"testing"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
@@ -28,7 +27,6 @@ func TestParseFlow(t *testing.T) {
 
 	type fields struct {
 		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
 		ts *transaction.MockSession
 	}
 	type args struct {
@@ -184,10 +182,9 @@ also-broken,127.0.0.2,127.0.0.1`,
 			f := fields{
 				ri: rimport.NewTestRepositoryImports(ctrl),
 				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
 			data, errParse := ui.Usecase.Traffic.ParseFlow(tt.args.channelMap, tt.args.flow)
 			r.Equal(tt.err, errParse)
@@ -201,7 +198,6 @@ func TestCountTraffic(t *testing.T) {
 
 	type fields struct {
 		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
 		ts *transaction.MockSession
 	}
 	type args struct {
@@ -281,13 +277,12 @@ func TestCountTraffic(t *testing.T) {
 			f := fields{
 				ri: rimport.NewTestRepositoryImports(ctrl),
 				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
 			}
 			if tt.prepare != nil {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
 			data := ui.Usecase.Traffic.CountTraffic(tt.args.oldTraffic, tt.args.newTraffic,
 				tt.args.channelMap, tt.args.channelID)
@@ -301,7 +296,6 @@ func TestSiftTraffic(t *testing.T) {
 
 	type fields struct {
 		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
 		ts *transaction.MockSession
 	}
 	type args struct {
@@ -393,13 +387,12 @@ func TestSiftTraffic(t *testing.T) {
 			f := fields{
 				ri: rimport.NewTestRepositoryImports(ctrl),
 				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
 			}
 			if tt.prepare != nil {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
 
 			data, err := ui.Usecase.Traffic.SiftTraffic(tt.args.channelMap,
 				tt.args.trafficMap, tt.args.sessionList)
