@@ -15,12 +15,20 @@ const defaultWorkerPoolSize = 10
 // :9090 занят самим prometheus, :2112 — конвенция client_golang
 const defaultMetricsAddr = ":2112"
 
+// defaultPostgresDBName имя базы по умолчанию
+const defaultPostgresDBName = "aggregator"
+
+// defaultPostgresTimezone таймзона соединения с бд по умолчанию
+const defaultPostgresTimezone = "Asia/Tashkent"
+
 // Config конфиг
 type Config struct {
 	Postgres struct {
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
 		URL      string `yaml:"url"`
+		DBName   string `yaml:"db_name"`
+		Timezone string `yaml:"timezone"`
 	} `yaml:"postgres"`
 	WorkerPool struct {
 		Size int `yaml:"size"`
@@ -34,14 +42,37 @@ func NewConfig(confPath string) (Config, error) {
 	return c, err
 }
 
-// PostgresURL адрес постгреса
+// PostgresURL адрес постгреса.
+// Значения из conf.yaml переопределяются переменными окружения
+// PG_URL, PG_PASSWORD, PG_DBNAME, PG_TIMEZONE
 func (c *Config) PostgresURL() string {
-	pgURL := os.Getenv("PG_URL")
-	if pgURL != "" {
+	if pgURL := os.Getenv("PG_URL"); pgURL != "" {
 		c.Postgres.URL = pgURL
 	}
-	return fmt.Sprintf("postgresql://%s:%s@%s/aggregator?sslmode=disable&timezone=Asia/Tashkent",
-		c.Postgres.User, c.Postgres.Password, c.Postgres.URL)
+
+	if pgPassword := os.Getenv("PG_PASSWORD"); pgPassword != "" {
+		c.Postgres.Password = pgPassword
+	}
+
+	if pgDBName := os.Getenv("PG_DBNAME"); pgDBName != "" {
+		c.Postgres.DBName = pgDBName
+	}
+
+	if pgTimezone := os.Getenv("PG_TIMEZONE"); pgTimezone != "" {
+		c.Postgres.Timezone = pgTimezone
+	}
+
+	if c.Postgres.DBName == "" {
+		c.Postgres.DBName = defaultPostgresDBName
+	}
+
+	if c.Postgres.Timezone == "" {
+		c.Postgres.Timezone = defaultPostgresTimezone
+	}
+
+	return fmt.Sprintf("postgresql://%s:%s@%s/%s?sslmode=disable&timezone=%s",
+		c.Postgres.User, c.Postgres.Password, c.Postgres.URL,
+		c.Postgres.DBName, c.Postgres.Timezone)
 }
 
 // WorkerPoolSize размер пула воркеров агрегации.
