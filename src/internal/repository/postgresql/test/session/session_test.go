@@ -38,7 +38,7 @@ func TestLoadOnlineSessionList(t *testing.T) {
 			NasIP:  "127.0.0.0",
 		}
 
-		_, err = postgresql.SqlxTx(ts).NamedExec(`
+		_, err = ts.Tx().NamedExec(`
 			insert into online_session (ip, sess_id, nas_ip)
 			values (:ip, :sess_id, :nas_ip)
 		`, expectedData)
@@ -81,7 +81,7 @@ func TestSaveChunkList(t *testing.T) {
 		r.NoError(repo.SaveChunkList(context.Background(), ts, expectedData))
 
 		t.Run("проверка данных", func(_ *testing.T) {
-			data, errSelect := gensql.Select[session.Chunk](context.Background(), postgresql.SqlxTx(ts), `
+			data, errSelect := gensql.Select[session.Chunk](context.Background(), ts.Tx(), `
 				select sess_id, channel_id, download, upload
 				from chunk
 				where sess_id = $1 and channel_id = $2

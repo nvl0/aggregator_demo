@@ -26,13 +26,14 @@ func NewFlowUsecase(
 	}
 }
 
-// PrepareFlow подготовка flow файла.
+// StreamFlow подготовка и потоковое чтение flow.
 // skipFileNames — имена файлов, чанки которых уже закоммичены: их содержимое
-// в flowStr не попадает, но имена возвращаются в fileNameList.
-func (u *FlowUsecase) PrepareFlow(
+// в onLine не попадает, но имена возвращаются в fileNameList
+func (u *FlowUsecase) StreamFlow(
 	dirName string,
 	skipFileNames map[string]bool,
-) (flowStr string, fileNameList []string, err error) {
+	onLine func(line string) error,
+) (fileNameList []string, flowSize int, err error) {
 	// получение списка имен файлов с директории
 	// чтобы перенести их в директорию ./tmp для считывания
 	fileNameListInDir, err := u.Repository.Flow.ReadFileNamesInFlowDir(dirName)
@@ -44,25 +45,28 @@ func (u *FlowUsecase) PrepareFlow(
 			if strings.Contains(fileName, flow.FlowNameSubStr) {
 				// перенос flow файла в директорию ./tmp
 				if err = u.Repository.Flow.MoveFlowToTempDir(dirName, fileName); err != nil {
-					u.log.Error("не удалось переместить готовый flow в tmp, ошибка", "error", err, "dir_name", dirName)
-					return flowStr, fileNameList, err
+					u.log.Error("не удалось переместить готовый flow в tmp, ошибка",
+						"error", err, "dir_name", dirName)
+					return fileNameList, flowSize, err
 				}
 			}
 		}
 
-		// чтение flow файла с директории ./tmp
-		if flowStr, fileNameList, err = u.Repository.Flow.ReadFlow(dirName, skipFileNames); err != nil {
-			u.log.Error("не удалось считать готовый flow с директории, ошибка", "error", err, "dir_name", dirName)
+		// потоковое чтение flow файлов с директории ./tmp
+		if fileNameList, flowSize, err = u.Repository.Flow.StreamFlow(
+			dirName, skipFileNames, onLine); err != nil {
+			u.log.Error("не удалось считать готовый flow с директории, ошибка",
+				"error", err, "dir_name", dirName)
 			err = global.ErrInternalError
-			return flowStr, fileNameList, err
+			return fileNameList, flowSize, err
 		}
 
-		return flowStr, fileNameList, err
+		return fileNameList, flowSize, err
 	case errors.Is(err, global.ErrNoData):
-		return flowStr, fileNameList, err
+		return fileNameList, flowSize, err
 	default:
 		u.log.Error("не удалось просмотреть директорию, ошибка", "error", err, "dir_name", dirName)
 		err = global.ErrInternalError
-		return flowStr, fileNameList, err
+		return fileNameList, flowSize, err
 	}
 }

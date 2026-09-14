@@ -4,6 +4,7 @@ import (
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/repository/storage"
 
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -98,8 +99,8 @@ func TestMoveFlowToTempDir(t *testing.T) {
 	})
 }
 
-// TestReadFlow чтение flow из tmp с пропуском уже закоммиченных файлов
-func TestReadFlow(t *testing.T) {
+// TestStreamFlow построчное чтение flow из tmp с пропуском уже закоммиченных файлов
+func TestStreamFlow(t *testing.T) {
 	const (
 		dirName   = "test_dir"
 		fileName1 = "ft-01.01.2026-00:00:00"
@@ -111,25 +112,39 @@ func TestReadFlow(t *testing.T) {
 	tests := []struct {
 		name             string
 		skipFileNames    map[string]bool
-		wantOutput       string
+		wantLines        []string
+		wantFlowSize     int
 		wantFileNameList []string
 	}{
 		{
-			name:             "все файлы новые",
-			skipFileNames:    nil,
-			wantOutput:       fileData1 + fileData2,
+			name:          "все файлы новые",
+			skipFileNames: nil,
+			wantLines: []string{
+				"#:doctets,srcaddr,dstaddr",
+				"4123,127.0.0.1,127.0.0.2",
+				"#:doctets,srcaddr,dstaddr",
+				"5670,127.0.0.1,127.0.0.3",
+			},
+			// оба файла заканчиваются переводом строки,
+			// поэтому сумма len(line)+1 совпадает с размером файлов байт в байт
+			wantFlowSize:     len(fileData1) + len(fileData2),
 			wantFileNameList: []string{fileName1, fileName2},
 		},
 		{
-			name:             "первый файл уже закоммичен",
-			skipFileNames:    map[string]bool{fileName1: true},
-			wantOutput:       fileData2,
+			name:          "первый файл уже закоммичен",
+			skipFileNames: map[string]bool{fileName1: true},
+			wantLines: []string{
+				"#:doctets,srcaddr,dstaddr",
+				"5670,127.0.0.1,127.0.0.3",
+			},
+			wantFlowSize:     len(fileData2),
 			wantFileNameList: []string{fileName1, fileName2},
 		},
 		{
 			name:             "все файлы уже закоммичены",
 			skipFileNames:    map[string]bool{fileName1: true, fileName2: true},
-			wantOutput:       "",
+			wantLines:        nil,
+			wantFlowSize:     0,
 			wantFileNameList: []string{fileName1, fileName2},
 		},
 	}
@@ -152,18 +167,65 @@ func TestReadFlow(t *testing.T) {
 				[]byte(fileData1), flow.AllRWX))
 			r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, fileName2),
 				[]byte(fileData2), flow.AllRWX))
-			// служебный файл git не является flow: ни в output, ни в fileNameList он попадать не должен
+			// служебный файл git не является flow: ни в строки, ни в fileNameList он попадать не должен
 			r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, flow.GitKeepName),
 				[]byte{}, flow.AllRWX))
 
 			repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
 
-			output, fileNameList, err := repo.ReadFlow(dirName, tt.skipFileNames)
+			var gotLines []string
+
+			fileNameList, flowSize, err := repo.StreamFlow(dirName, tt.skipFileNames,
+				func(line string) error {
+					gotLines = append(gotLines, line)
+
+					return nil
+				})
 			r.NoError(err)
-			r.Equal(tt.wantOutput, output)
+			r.Equal(tt.wantLines, gotLines)
+			r.Equal(tt.wantFlowSize, flowSize)
 			r.Equal(tt.wantFileNameList, fileNameList)
 		})
 	}
+}
+
+// TestStreamFlowCallbackError ошибка callback прерывает чтение
+func TestStreamFlowCallbackError(t *testing.T) {
+	r := require.New(t)
+
+	const (
+		dirName  = "test_dir"
+		fileName = "ft-01.01.2026-00:00:00"
+		fileData = "#:doctets,srcaddr,dstaddr\n4123,127.0.0.1,127.0.0.2\n5670,127.0.0.1,127.0.0.3\n"
+	)
+
+	path := fmt.Sprintf("%s/%s", flowDir, dirName)
+	r.NoError(os.Mkdir(path, flow.AllRWX))
+
+	t.Cleanup(func() {
+		os.RemoveAll(path)
+	})
+
+	tmpPath := fmt.Sprintf("%s/%s", path, flow.FlowTempDir)
+	r.NoError(os.Mkdir(tmpPath, flow.AllRWX))
+	r.NoError(os.WriteFile(fmt.Sprintf("%s/%s", tmpPath, fileName),
+		[]byte(fileData), flow.AllRWX))
+
+	repo := storage.NewFlowRepository(flowDir, subnetDisabledDir)
+
+	errCallback := errors.New("аккумулятор отказался принимать строку")
+
+	var gotLines int
+
+	fileNameList, _, err := repo.StreamFlow(dirName, nil, func(_ string) error {
+		gotLines++
+
+		return errCallback
+	})
+	r.ErrorIs(err, errCallback)
+	// чтение оборвалось на первой же строке
+	r.Equal(1, gotLines)
+	r.Equal([]string{fileName}, fileNameList)
 }
 
 func TestRemoveOld(t *testing.T) {

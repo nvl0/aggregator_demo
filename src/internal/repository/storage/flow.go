@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -79,25 +80,24 @@ func (r *flowRepository) MoveFlowToTempDir(dirName, fileName string) error {
 	)
 }
 
-// ReadFlow считать бинарники flow из директории tmp.
-// Содержимое файлов, перечисленных в skipFileNames, в output не попадает:
+// StreamFlow построчное чтение flow из директории tmp.
+// Содержимое файлов, перечисленных в skipFileNames, не читается:
 // их чанки уже закоммичены в предыдущем цикле и повторный подсчет задвоил бы трафик.
 // fileNameList содержит имена всех найденных flow файлов, включая пропущенные.
-func (r *flowRepository) ReadFlow(
+// flowSize — суммарный размер прочитанных (не пропущенных) строк в байтах
+func (r *flowRepository) StreamFlow(
 	dirName string,
 	skipFileNames map[string]bool,
-) (output string, fileNameList []string, err error) {
+	onLine func(line string) error,
+) (fileNameList []string, flowSize int, err error) {
 	path := fmt.Sprintf("%s/%s/%s", r.flowDirPath, dirName, flow.FlowTempDir)
 
 	dirList, err := os.ReadDir(path)
 	if err != nil {
-		return output, fileNameList, err
+		return fileNameList, flowSize, err
 	}
 
-	var (
-		sumB []byte
-		b    []byte
-	)
+	var size int
 
 	for _, dir := range dirList {
 		// вложенные директории и служебные файлы (.gitkeep) не являются flow
@@ -111,17 +111,39 @@ func (r *flowRepository) ReadFlow(
 			continue
 		}
 
-		b, err = os.ReadFile(fmt.Sprintf("%s/%s", path, dir.Name()))
-		if err != nil {
-			return output, fileNameList, err
-		}
+		size, err = r.streamFile(fmt.Sprintf("%s/%s", path, dir.Name()), onLine)
+		flowSize += size
 
-		sumB = append(sumB, b...)
+		if err != nil {
+			return fileNameList, flowSize, err
+		}
 	}
 
-	output = string(sumB)
+	return fileNameList, flowSize, err
+}
 
-	return output, fileNameList, err
+// streamFile построчное чтение одного flow файла
+func (r *flowRepository) streamFile(filePath string, onLine func(line string) error) (
+	size int, err error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return size, err
+	}
+	defer func() { _ = f.Close() }()
+
+	scanner := bufio.NewScanner(f)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		// +1: перевод строки, отброшенный сканером
+		size += len(line) + 1
+
+		if err = onLine(line); err != nil {
+			return size, err
+		}
+	}
+
+	return size, scanner.Err()
 }
 
 // RemoveOld удаляет старый flow

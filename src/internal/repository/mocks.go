@@ -231,22 +231,6 @@ func (mr *MockFlowMockRecorder) ReadFileNamesInFlowDir(dirName any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFileNamesInFlowDir", reflect.TypeOf((*MockFlow)(nil).ReadFileNamesInFlowDir), dirName)
 }
 
-// ReadFlow mocks base method.
-func (m *MockFlow) ReadFlow(dirName string, skipFileNames map[string]bool) (string, []string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadFlow", dirName, skipFileNames)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].([]string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// ReadFlow indicates an expected call of ReadFlow.
-func (mr *MockFlowMockRecorder) ReadFlow(dirName, skipFileNames any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFlow", reflect.TypeOf((*MockFlow)(nil).ReadFlow), dirName, skipFileNames)
-}
-
 // ReadFlowDirNames mocks base method.
 func (m *MockFlow) ReadFlowDirNames() ([]string, error) {
 	m.ctrl.T.Helper()
@@ -274,4 +258,20 @@ func (m *MockFlow) RemoveOld(nasIP string) error {
 func (mr *MockFlowMockRecorder) RemoveOld(nasIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOld", reflect.TypeOf((*MockFlow)(nil).RemoveOld), nasIP)
+}
+
+// StreamFlow mocks base method.
+func (m *MockFlow) StreamFlow(dirName string, skipFileNames map[string]bool, onLine func(string) error) ([]string, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StreamFlow", dirName, skipFileNames, onLine)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// StreamFlow indicates an expected call of StreamFlow.
+func (mr *MockFlowMockRecorder) StreamFlow(dirName, skipFileNames, onLine any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamFlow", reflect.TypeOf((*MockFlow)(nil).StreamFlow), dirName, skipFileNames, onLine)
 }

@@ -34,6 +34,10 @@ type Flow interface {
 	ReadFlowDirNames() (dirNameList []string, err error)
 	ReadFileNamesInFlowDir(dirName string) (fileNameList []string, err error)
 	MoveFlowToTempDir(dirName, fileName string) error
-	ReadFlow(dirName string, skipFileNames map[string]bool) (output string, fileNameList []string, err error)
+	// StreamFlow построчное чтение flow из tmp: каждая строка отдается в onLine.
+	// Содержимое файлов из skipFileNames не читается, но их имена
+	// по-прежнему попадают в fileNameList
+	StreamFlow(dirName string, skipFileNames map[string]bool, onLine func(line string) error) (
+		fileNameList []string, flowSize int, err error)
 	RemoveOld(nasIP string) (err error)
 }

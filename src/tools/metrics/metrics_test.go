@@ -111,7 +111,7 @@ func TestNewPreinitializesLabeledSeries(t *testing.T) {
 		requireLine(t, body, `aggregator_phase_duration_seconds_count{phase="`+phase+`"} 0`)
 	}
 
-	for _, phase := range []string{"prepare_flow", "parse_flow", "sift_traffic", "save_chunks"} {
+	for _, phase := range []string{"stream_flow", "sift_traffic", "save_chunks"} {
 		requireLine(t, body, `aggregator_nas_phase_duration_seconds_count{phase="`+phase+`"} 0`)
 	}
 }
@@ -224,11 +224,11 @@ func TestRecordMethods(t *testing.T) {
 			name: "фазы цикла и nas_ip",
 			record: func(m *metrics.Metrics) {
 				m.ObservePhase(metrics.PhaseReadDirs, 100*time.Millisecond)
-				m.ObserveNASPhase(metrics.NASPhaseParseFlow, 100*time.Millisecond)
+				m.ObserveNASPhase(metrics.NASPhaseStreamFlow, 100*time.Millisecond)
 			},
 			want: []string{
 				`aggregator_phase_duration_seconds_count{phase="read_dirs"} 1`,
-				`aggregator_nas_phase_duration_seconds_count{phase="parse_flow"} 1`,
+				`aggregator_nas_phase_duration_seconds_count{phase="stream_flow"} 1`,
 			},
 		},
 		{
@@ -272,7 +272,7 @@ func TestNilReceiverIsSafe(_ *testing.T) {
 	m.SetLastSuccess()
 	m.SetNASDiscovered(1)
 	m.ObservePhase(metrics.PhaseReadDirs, time.Second)
-	m.ObserveNASPhase(metrics.NASPhaseParseFlow, time.Second)
+	m.ObserveNASPhase(metrics.NASPhaseStreamFlow, time.Second)
 	m.AddChunksSaved(1)
 	m.ObserveFlowSize(1)
 	m.AddAccountedTraffic(metrics.DirectionUpload, 1)

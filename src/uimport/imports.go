@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"aggregator/src/bimport"
 	"aggregator/src/config"
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/transaction"
@@ -20,13 +19,11 @@ type UsecaseImports struct {
 	Config         config.Config
 	SessionManager transaction.SessionManager
 	Usecase        Usecase
-	*bimport.BridgeImports
 }
 
 func NewUsecaseImports(
 	log *slog.Logger,
 	ri rimport.RepositoryImports,
-	bi *bimport.BridgeImports,
 	m *metrics.Metrics,
 ) UsecaseImports {
 	// метрики не переданы (тесты, loadgen): пишем в выброшенный реестр
@@ -42,19 +39,33 @@ func NewUsecaseImports(
 		os.Exit(1)
 	}
 
-	ui := UsecaseImports{
+	// зависимостей друг от друга у этих четырех нет, порядок произволен
+	flowUsecase := usecase.NewFlowUsecase(logger.NewUsecaseLogger(log, "flow"), ri)
+	sessionUsecase := usecase.NewSessionUsecase(logger.NewUsecaseLogger(log, "session"), ri)
+	channelUsecase := usecase.NewChannelUsecase(logger.NewUsecaseLogger(log, "channel"), ri)
+	trafficUsecase := usecase.NewTrafficUsecase(
+		logger.NewUsecaseLogger(log, "traffic"), ri, internalNet)
+
+	// агрегатор собирается последним: он единственный зависит от соседей
+	aggregatorUsecase := usecase.NewAggregatorUsecase(
+		logger.NewUsecaseLogger(log, "aggregator"), ri,
+		usecase.AggregatorDeps{
+			Flow:    flowUsecase,
+			Session: sessionUsecase,
+			Channel: channelUsecase,
+			Traffic: trafficUsecase,
+		}, m)
+
+	return UsecaseImports{
 		Config:         ri.Config,
 		SessionManager: ri.SessionManager,
 
 		Usecase: Usecase{
-			Flow:       usecase.NewFlowUsecase(logger.NewUsecaseLogger(log, "flow"), ri),
-			Session:    usecase.NewSessionUsecase(logger.NewUsecaseLogger(log, "session"), ri),
-			Channel:    usecase.NewChannelUsecase(logger.NewUsecaseLogger(log, "channel"), ri),
-			Traffic:    usecase.NewTrafficUsecase(logger.NewUsecaseLogger(log, "traffic"), ri, bi, internalNet),
-			Aggregator: usecase.NewAggregatorUsecase(logger.NewUsecaseLogger(log, "aggregator"), ri, bi, m),
+			Flow:       flowUsecase,
+			Session:    sessionUsecase,
+			Channel:    channelUsecase,
+			Traffic:    trafficUsecase,
+			Aggregator: aggregatorUsecase,
 		},
-		BridgeImports: bi,
 	}
-
-	return ui
 }

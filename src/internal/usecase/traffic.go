@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/flow"
 	"aggregator/src/internal/entity/global"
@@ -23,157 +22,161 @@ const flowRowFieldCount = 3
 type TrafficUsecase struct {
 	log *slog.Logger
 	rimport.RepositoryImports
-	*bimport.BridgeImports
 	internalNet cidranger.Ranger
 }
 
 func NewTrafficUsecase(
 	log *slog.Logger,
 	ri rimport.RepositoryImports,
-	bi *bimport.BridgeImports,
 	internalNet cidranger.Ranger,
 ) *TrafficUsecase {
 	return &TrafficUsecase{
 		log:               log,
 		RepositoryImports: ri,
-		BridgeImports:     bi,
 		internalNet:       internalNet,
 	}
 }
 
-// ParseFlow парсинг flow
-// trafficMap map[user_ip]map[channel_id]Traffic
-func (u *TrafficUsecase) ParseFlow(channelMap map[channel.ID]bool, flowStr string) (
+// FlowAccumulator построчный аккумулятор трафика одного nas_ip.
+// Состояние живет здесь, а не в TrafficUsecase: usecase один на все воркеры пула,
+// а nas_ip обрабатываются параллельно
+type FlowAccumulator struct {
+	u          *TrafficUsecase
+	channelMap map[channel.ID]bool
+	// trafficMap map[user_ip]map[channel_id]Traffic
+	trafficMap map[session.IP]map[channel.ID]traffic.Traffic
+	// parsedRecords количество успешно распарсенных строк
+	parsedRecords int
+	// classifyErrCount количество строк, которые не удалось классифицировать по блоку internal
+	classifyErrCount int
+}
+
+// NewFlowAccumulator аккумулятор трафика на один nas_ip
+func (u *TrafficUsecase) NewFlowAccumulator(channelMap map[channel.ID]bool) *FlowAccumulator {
+	return &FlowAccumulator{
+		u:          u,
+		channelMap: channelMap,
+		trafficMap: make(map[session.IP]map[channel.ID]traffic.Traffic),
+	}
+}
+
+// AccumulateLine разбор одной строки flow и учет ее в трафике.
+// Некорректная строка не является ошибкой: она пропускается и только считается,
+// как и в теле цикла прежнего ParseFlow
+func (a *FlowAccumulator) AccumulateLine(line string) error {
+	// flow собирается с нескольких файлов
+	// в каждом файле есть заголовок
+	// #:doctets,srcaddr,dstaddr
+	if strings.Contains(line, flow.FlowHeader) {
+		return nil
+	}
+
+	// ряд который содержит \t или \n не будет считан
+	if line == "" {
+		return nil
+	}
+
+	// определение аргументов в ряду
+	rowArgs := strings.Split(line, ",")
+	if len(rowArgs) != flowRowFieldCount {
+		return nil
+	}
+
+	var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
+
+	// парсинг аргументов
+	record, err := a.u.parseRecord(bytes, srcIP, dstIP)
+	if err != nil {
+		a.u.log.Warn("обнаружена некорректная запись flow, ошибка",
+			"error", err, "bytes", bytes, "src_ip", srcIP, "dst_ip", dstIP)
+		return nil
+	}
+
+	a.parsedRecords++
+
+	// определение принадлежности отправителя/получателя к сети.
+	// ошибку не логируем построчно (систематический сбой затопит лог) —
+	// копим счетчик и пишем один итог в Result
+	isSrcInternal, containsErr := a.u.internalNet.Contains(record.SrcIP)
+
+	var isDstInternal bool
+	if containsErr == nil {
+		isDstInternal, containsErr = a.u.internalNet.Contains(record.DstIP)
+	}
+
+	if containsErr != nil {
+		a.classifyErrCount++
+		return nil //nolint:nilerr // ошибка классификации сети не прерывает разбор, копится в classifyErrCount
+	}
+
+	a.count(record, isSrcInternal, isDstInternal)
+
+	return nil
+}
+
+// count запись трафика записи по направлениям
+func (a *FlowAccumulator) count(record flow.Record, isSrcInternal, isDstInternal bool) {
+	switch {
+	// получатель и отправитель внутри сети internal
+	case isSrcInternal && isDstInternal:
+		// запись получателю в download
+		a.trafficMap[record.SrcIPkey()] = a.u.CountTraffic(
+			a.trafficMap[record.SrcIPkey()],
+			traffic.NewTrafficDownload(record.ByteSize),
+			a.channelMap,
+			channel.Internal,
+		)
+
+		// запись отправителю в upload
+		a.trafficMap[record.DstIPkey()] = a.u.CountTraffic(
+			a.trafficMap[record.DstIPkey()],
+			traffic.NewTrafficUpload(record.ByteSize),
+			a.channelMap,
+			channel.Internal,
+		)
+
+	// получатель внутри сети internal
+	case isSrcInternal:
+		// отправитель во внешней сети
+		a.trafficMap[record.SrcIPkey()] = a.u.CountTraffic(
+			a.trafficMap[record.SrcIPkey()],
+			traffic.NewTrafficDownload(record.ByteSize),
+			a.channelMap,
+			channel.External,
+		)
+
+	// отправитель внутри сети internal
+	case isDstInternal:
+		// получатель во внешней сети
+		a.trafficMap[record.DstIPkey()] = a.u.CountTraffic(
+			a.trafficMap[record.DstIPkey()],
+			traffic.NewTrafficUpload(record.ByteSize),
+			a.channelMap,
+			channel.External,
+		)
+	}
+}
+
+// Result итог разбора: накопленный трафик и статус.
+// global.ErrNoData — строки распарсились, но internal трафика нет (flow только с external);
+// global.ErrInternalError — ни одной валидной строки либо ни одну не удалось классифицировать
+func (a *FlowAccumulator) Result() (
 	trafficMap map[session.IP]map[channel.ID]traffic.Traffic, err error) {
-	var (
-		// обозначение принадлежности получателя/отправителя к сети
-		isSrcInternal, isDstInternal bool
-		// строчный ряд при считывании flow
-		row string
-		// аргументы в ряду слева направо
-		rowArgs []string
-		// запись полученная при парсинге агрументов одного ряда
-		record flow.Record
-		// ошибка проверки принадлежности IP к блоку internal
-		containsErr error
-		// количество успешно распарсенных строк
-		parsedRecords int
-		// количество строк, которые не удалось классифицировать по блоку internal
-		classifyErrCount int
-	)
-
-	// построчная разбивка flowStr
-	// flowStr представляет собой таблицу
-	flowArr := strings.Split(flowStr, "\n")
-
-	trafficMap = make(map[session.IP]map[channel.ID]traffic.Traffic, len(flowArr))
-
-	// парсинг flow
-	for _, row = range flowArr {
-		// flow собирается с несокльких файлов
-		// в каждом файле есть заголовок
-		// #:doctets,srcaddr,dstaddr
-		if strings.Contains(row, flow.FlowHeader) {
-			continue
-		}
-
-		// ряд который содержит \t или \n не будет считан
-		if row == "" {
-			continue
-		}
-
-		// определение аргументов в ряду
-		if rowArgs = strings.Split(row, ","); len(rowArgs) != flowRowFieldCount {
-			continue
-		}
-
-		var bytes, srcIP, dstIP = rowArgs[0], rowArgs[1], rowArgs[2]
-
-		// парсинг аргументов
-		if record, err = u.parseRecord(bytes, srcIP, dstIP); err != nil {
-			u.log.Warn("обнаружена некорректная запись flow, ошибка",
-				"error", err, "bytes", bytes, "src_ip", srcIP, "dst_ip", dstIP)
-			continue
-		}
-
-		parsedRecords++
-
-		// определение принадлежности отправителя/получателя к сети.
-		// ошибку не логируем построчно (систематический сбой затопит лог) —
-		// копим счетчик и пишем один итог после цикла
-		isSrcInternal, containsErr = u.internalNet.Contains(record.SrcIP)
-		if containsErr == nil {
-			isDstInternal, containsErr = u.internalNet.Contains(record.DstIP)
-		}
-		if containsErr != nil {
-			classifyErrCount++
-			continue
-		}
-
-		switch {
-		// получатель и отправитель внутри сети internal
-		case isSrcInternal && isDstInternal:
-
-			// запись получателю в download
-			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
-				trafficMap[record.SrcIPkey()],
-				traffic.NewTrafficDownload(record.ByteSize),
-				channelMap,
-				channel.Internal,
-			)
-
-			// запись отправителю в upload
-			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
-				trafficMap[record.DstIPkey()],
-				traffic.NewTrafficUpload(record.ByteSize),
-				channelMap,
-				channel.Internal,
-			)
-
-		// получатель внутри сети internal
-		case isSrcInternal:
-
-			// отправитель во внешней сети
-			trafficMap[record.SrcIPkey()] = u.Bridge.Traffic.CountTraffic(
-				trafficMap[record.SrcIPkey()],
-				traffic.NewTrafficDownload(record.ByteSize),
-				channelMap,
-				channel.External,
-			)
-
-		// отправитель внутри сети internal
-		case isDstInternal:
-
-			// получатель во внешней сети
-			trafficMap[record.DstIPkey()] = u.Bridge.Traffic.CountTraffic(
-				trafficMap[record.DstIPkey()],
-				traffic.NewTrafficUpload(record.ByteSize),
-				channelMap,
-				channel.External,
-			)
-		}
+	if a.classifyErrCount > 0 {
+		a.u.log.Warn("не удалось проверить принадлежность IP к блоку internal, строки пропущены",
+			"count", a.classifyErrCount)
 	}
 
-	if classifyErrCount > 0 {
-		u.log.Warn("не удалось проверить принадлежность IP к блоку internal, строки пропущены",
-			"count", classifyErrCount)
-	}
-
-	if len(trafficMap) == 0 {
+	if len(a.trafficMap) == 0 {
 		switch {
-		// ни одной валидной строки (дрейф формата flow) либо ни одну строку
-		// не удалось классифицировать: это не "нет трафика", а сбой обработки.
-		// flow оставляем на диске, не отдаем на удаление в Aggregate
-		case parsedRecords == 0, classifyErrCount == parsedRecords:
+		case a.parsedRecords == 0, a.classifyErrCount == a.parsedRecords:
 			err = global.ErrInternalError
-		// строки распарсились, но внутреннего трафика нет (flow только с external) —
-		// можно двигаться дальше и убрать файлы
 		default:
 			err = global.ErrNoData
 		}
 	}
 
-	return trafficMap, err
+	return a.trafficMap, err
 }
 
 // parseRecord парсинг одной записи flow

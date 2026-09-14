@@ -2,10 +2,10 @@ package external_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
-	"aggregator/src/bimport"
 	"aggregator/src/external"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/session"
@@ -31,8 +31,7 @@ func TestRunStopsOnContextCancel(t *testing.T) {
 	defer ctrl.Finish()
 
 	ri := rimport.NewTestRepositoryImports(ctrl)
-	bi := bimport.NewTestBridgeImports(ctrl)
-	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), bi.BridgeImports(), nil)
+	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -66,23 +65,24 @@ func TestCancelDuringCycleStopsDispatch(t *testing.T) {
 	defer ctrl.Finish()
 
 	ri := rimport.NewTestRepositoryImports(ctrl)
-	bi := bimport.NewTestBridgeImports(ctrl)
 	ts := transaction.NewMockSession(ctrl)
 
-	channelMap := map[channel.ID]bool{
-		channel.Internal: true,
-		channel.External: false,
+	channelList := []channel.Channel{
+		{ID: channel.Internal, Enabled: true},
+		{ID: channel.External, Enabled: false},
 	}
-	sessionMap := map[session.NasIP][]session.OnlineSession{
-		nasIP1: {{SessID: 1, NasIP: nasIP1, IP: "127.0.0.2"}},
-		nasIP2: {{SessID: 2, NasIP: nasIP2, IP: "127.0.0.3"}},
+	sessionList := []session.OnlineSession{
+		{SessID: 1, NasIP: nasIP1, IP: "127.0.0.2"},
+		{SessID: 2, NasIP: nasIP2, IP: "127.0.0.3"},
 	}
 
-	ri.SessionManager.EXPECT().CreateSession().Return(ts).Times(2)
-	ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
-	ts.EXPECT().Rollback().Return(nil).Times(2)
-	bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), ts).Return(channelMap, nil)
-	bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), ts).Return(sessionMap, nil)
+	// три транзакции: мапка каналов, мапка сессий и чекпоинт единственного
+	// nas_ip, дошедшего до воркера
+	ri.SessionManager.EXPECT().CreateSession().Return(ts).Times(3)
+	ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
+	ts.EXPECT().Rollback().Return(nil).Times(3)
+	ri.MockRepository.Channel.EXPECT().LoadChannelList(gomock.Any(), ts).Return(channelList, nil)
+	ri.MockRepository.Session.EXPECT().LoadOnlineSessionList(gomock.Any(), ts).Return(sessionList, nil)
 	ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return([]string{nasIP1, nasIP2}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -91,16 +91,18 @@ func TestCancelDuringCycleStopsDispatch(t *testing.T) {
 	release := make(chan struct{})
 
 	// воркер первого nas_ip занимает единственный слот пула и отменяет контекст.
-	// Aggregate для nasIP2 не ожидается: рассылка обязана прекратиться
-	bi.TestBridge.Aggregator.EXPECT().
-		Aggregate(gomock.Any(), nasIP1, sessionMap[nasIP1], channelMap).
-		Do(func(_ context.Context, _ string, _ []session.OnlineSession, _ map[channel.ID]bool) {
+	// для nasIP2 загрузка чекпоинта не ожидается: рассылка обязана прекратиться
+	ri.MockRepository.FlowBatch.EXPECT().
+		LoadCommittedFileNames(gomock.Any(), ts, nasIP1).
+		DoAndReturn(func(_ context.Context, _ transaction.Session, _ string) (map[string]bool, error) {
 			cancel()
 			close(canceled)
 			<-release
+
+			return nil, errors.New("обработка nas_ip остановлена тестом")
 		})
 
-	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), bi.BridgeImports(), nil)
+	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil)
 	c := external.NewCron(testLogger, ui)
 
 	done := make(chan struct{})

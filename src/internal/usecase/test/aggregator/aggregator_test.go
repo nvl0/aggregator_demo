@@ -3,22 +3,23 @@ package aggregator_test
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"aggregator/src/bimport"
 	"aggregator/src/internal/entity/channel"
 	"aggregator/src/internal/entity/global"
 	"aggregator/src/internal/entity/session"
 	"aggregator/src/internal/entity/traffic"
 	"aggregator/src/internal/transaction"
+	"aggregator/src/internal/usecase"
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
-	"aggregator/src/uimport"
 
+	"github.com/yl2chen/cidranger"
 	"go.uber.org/mock/gomock"
 )
 
@@ -26,11 +27,49 @@ var (
 	testLogger = logger.NewDiscard()
 )
 
+// newTestTrafficUsecase настоящий TrafficUsecase поверх подсети internal 127.0.0.0/20.
+// из него берется живой FlowAccumulator: разбор строк внутри callback мокировать нечем
+func newTestTrafficUsecase(t *testing.T, ri rimport.RepositoryImports) *usecase.TrafficUsecase {
+	t.Helper()
+
+	ranger := cidranger.NewPCTrieRanger()
+
+	_, network, err := net.ParseCIDR("127.0.0.0/20")
+	if err != nil {
+		t.Fatalf("не удалось разобрать подсеть internal, ошибка %v", err)
+	}
+
+	if err = ranger.Insert(cidranger.NewBasicRangerEntry(*network)); err != nil {
+		t.Fatalf("не удалось наполнить подсеть internal, ошибка %v", err)
+	}
+
+	return usecase.NewTrafficUsecase(testLogger, ri, ranger)
+}
+
+// streamLines DoAndReturn для мока StreamFlow: прогоняет flow построчно
+// через callback агрегатора и возвращает список файлов и размер flow
+func streamLines(flowStr string, fileNameList []string) func(
+	string, map[string]bool, func(line string) error) ([]string, int, error) {
+	return func(_ string, _ map[string]bool, onLine func(line string) error) (
+		[]string, int, error) {
+		for _, line := range strings.Split(flowStr, "\n") {
+			if err := onLine(line); err != nil {
+				return fileNameList, 0, err
+			}
+		}
+
+		return fileNameList, len(flowStr), nil
+	}
+}
+
 func TestStart(t *testing.T) {
 	type fields struct {
-		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
-		ts *transaction.MockSession
+		ri      rimport.TestRepositoryImports
+		ts      *transaction.MockSession
+		flow    *usecase.MockFlowStreamer
+		session *usecase.MockSessionLoader
+		channel *usecase.MockChannelLoader
+		traffic *usecase.MockTrafficProcessor
 	}
 	type args struct {
 		ctx context.Context
@@ -68,18 +107,22 @@ func TestStart(t *testing.T) {
 				}
 				dirList := []string{nasIP}
 
-				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
-				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+				// три транзакции: мапка каналов, мапка сессий
+				// и чекпоинт внутри дошедшего до воркера Aggregate
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
+				f.channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
+				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
-				for _, item := range dirList {
-					f.bi.TestBridge.Aggregator.EXPECT().Aggregate(gomock.Any(), nasIP,
-						sessionMap[item], channelMap)
-				}
+				// Aggregate больше не мок: это прямой самовызов.
+				// рассылка дошла до воркера, если начался первый шаг Aggregate —
+				// загрузка чекпоинта. Ошибка обрывает обработку nas_ip сразу после неё
+				f.ri.MockRepository.FlowBatch.EXPECT().
+					LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).
+					Return(nil, errors.New("проверка рассылки"))
 			},
 			args: args{
 				ctx: context.Background(),
@@ -105,13 +148,16 @@ func TestStart(t *testing.T) {
 
 				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
 				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
+				f.channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
 				f.ts.EXPECT().Rollback().Return(nil).Times(2)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
-				// Aggregate не ожидается: пул возвращает false на отмененном контексте
+				// пул возвращает false на отмененном контексте: воркер не стартует,
+				// значит и до загрузки чекпоинта дело не доходит
+				f.ri.MockRepository.FlowBatch.EXPECT().
+					LoadCommittedFileNames(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 			},
 			args: args{
 				ctx: canceledCtx,
@@ -135,18 +181,19 @@ func TestStart(t *testing.T) {
 				}
 				dirList := []string{nasIP}
 
-				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(2)
-				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(2)
-				f.bi.TestBridge.Channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
-				f.bi.TestBridge.Session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
-				f.ts.EXPECT().Rollback().Return(nil).Times(2)
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(3)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(3)
+				f.channel.EXPECT().LoadChannelMap(gomock.Any(), f.ts).Return(channelMap, nil)
+				f.session.EXPECT().LoadOnlineSessionMap(gomock.Any(), f.ts).Return(sessionMap, nil)
+				// rollback чекпоинтной транзакции докатывается на раскрутке паники
+				f.ts.EXPECT().Rollback().Return(nil).Times(3)
 
 				f.ri.MockRepository.Flow.EXPECT().ReadFlowDirNames().Return(dirList, nil)
 
 				// если пул не перехватит панику, упадет весь тестовый процесс
-				f.bi.TestBridge.Aggregator.EXPECT().
-					Aggregate(gomock.Any(), nasIP, sessionMap[nasIP], channelMap).
-					Do(func(_ context.Context, _ string, _ []session.OnlineSession, _ map[channel.ID]bool) {
+				f.ri.MockRepository.FlowBatch.EXPECT().
+					LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).
+					Do(func(_ context.Context, _ transaction.Session, _ string) {
 						panic("паника тестового воркера")
 					})
 			},
@@ -161,26 +208,40 @@ func TestStart(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			f := fields{
-				ri: rimport.NewTestRepositoryImports(ctrl),
-				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
+				ri:      rimport.NewTestRepositoryImports(ctrl),
+				ts:      transaction.NewMockSession(ctrl),
+				flow:    usecase.NewMockFlowStreamer(ctrl),
+				session: usecase.NewMockSessionLoader(ctrl),
+				channel: usecase.NewMockChannelLoader(ctrl),
+				traffic: usecase.NewMockTrafficProcessor(ctrl),
 			}
 			if tt.prepare != nil {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			u := usecase.NewAggregatorUsecase(testLogger, f.ri.RepositoryImports(),
+				usecase.AggregatorDeps{
+					Flow:    f.flow,
+					Session: f.session,
+					Channel: f.channel,
+					Traffic: f.traffic,
+				}, metrics.Nop())
 
-			ui.Usecase.Aggregator.Start(tt.args.ctx)
+			u.Start(tt.args.ctx)
 		})
 	}
 }
 
 func TestAggregate(t *testing.T) {
 	type fields struct {
-		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
-		ts *transaction.MockSession
+		ri      rimport.TestRepositoryImports
+		ts      *transaction.MockSession
+		flow    *usecase.MockFlowStreamer
+		session *usecase.MockSessionLoader
+		channel *usecase.MockChannelLoader
+		traffic *usecase.MockTrafficProcessor
+		// realTraffic источник живого FlowAccumulator для мока TrafficProcessor
+		realTraffic *usecase.TrafficUsecase
 	}
 	type args struct {
 		ctx         context.Context
@@ -192,6 +253,7 @@ func TestAggregate(t *testing.T) {
 	const (
 		nasIP   = "127.0.0.0"
 		ip1     = "127.0.0.1"
+		ip2     = "127.0.0.2"
 		sessID  = 1
 		newFile = "ft-01.01.2026-00:05:00"
 		oldFile = "ft-01.01.2026-00:00:00"
@@ -211,18 +273,30 @@ func TestAggregate(t *testing.T) {
 		channel.Internal: true,
 		channel.External: false,
 	}
+	// то, что реально накопит FlowAccumulator из flowStr при channelMap кейсов:
+	// external выключен, поэтому в мапке только internal
 	trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
 		ip1: {
 			channel.Internal: {
 				Download: 366,
 				Upload:   801,
 			},
-			channel.External: {
-				Download: 8390,
-				Upload:   568,
+		},
+		ip2: {
+			channel.Internal: {
+				Download: 801,
+				Upload:   366,
 			},
 		},
 	}
+	// обе стороны во внешней сети: строки валидны, но internal трафика нет
+	externalOnlyFlow := `100,8.8.8.8,9.9.9.9
+200,9.9.9.9,8.8.8.8`
+
+	// ни одной валидной строки: дрейф формата flow
+	brokenFlow := `notanumber,127.0.0.1,127.0.0.2
+also-broken,127.0.0.2,127.0.0.1`
+
 	sessionList := []session.OnlineSession{
 		{
 			SessID: sessID,
@@ -258,11 +332,11 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(flowStr, fileNameList)),
+					f.traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
@@ -295,8 +369,10 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return("", fileNameList, nil),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						Return(fileNameList, 0, nil),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
 					f.ts.EXPECT().Commit().Return(nil),
@@ -322,12 +398,12 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					// flowStr содержит только новый файл, старый пропущен в ReadFlow
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					// flowStr содержит только новый файл, старый пропущен в StreamFlow
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(flowStr, fileNameList)),
+					f.traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					// в чекпоинт уходит и уже известный oldFile, и новый newFile
@@ -361,11 +437,11 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(flowStr, fileNameList)),
+					f.traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
@@ -385,7 +461,7 @@ func TestAggregate(t *testing.T) {
 			},
 		},
 		{
-			name: "ParseFlow без учитываемого трафика, tmp очищается без чекпоинта",
+			name: "flow без internal трафика, tmp очищается без чекпоинта",
 			prepare: func(f *fields) {
 				committedFileNames := map[string]bool{}
 				fileNameList := []string{newFile}
@@ -399,10 +475,12 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(nil, global.ErrNoData),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					// обе стороны во внешней сети: строки валидны, но internal трафика нет —
+					// global.ErrNoData приходит из настоящего acc.Result()
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(externalOnlyFlow, fileNameList)),
 					// файлы уже в tmp: их обязательно нужно убрать, иначе они копятся
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
@@ -431,11 +509,11 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(flowStr, fileNameList)),
+					f.traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(nil, global.ErrNoData),
 					f.ri.MockRepository.Flow.EXPECT().RemoveOld(nasIP).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().RemoveByNasIP(gomock.Any(), f.ts, nasIP).Return(nil),
@@ -450,7 +528,7 @@ func TestAggregate(t *testing.T) {
 			},
 		},
 		{
-			name: "ParseFlow не распознал flow, tmp не трогаем",
+			name: "flow не распознан, tmp не трогаем",
 			prepare: func(f *fields) {
 				committedFileNames := map[string]bool{}
 				fileNameList := []string{newFile}
@@ -464,13 +542,60 @@ func TestAggregate(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(nil, global.ErrInternalError),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					// ни одной валидной строки — global.ErrInternalError приходит
+					// из настоящего acc.Result()
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(brokenFlow, fileNameList)),
 				)
 
-				// RemoveOld / RemoveByNasIP не ожидаются
+				// SiftTraffic / RemoveOld / RemoveByNasIP не ожидаются
+			},
+			args: args{
+				ctx:         context.Background(),
+				nasIP:       nasIP,
+				sessionList: sessionList,
+				channelMap:  channelMap,
+			},
+		},
+		{
+			name: "ошибка StreamFlow в середине потока, обработка останавливается",
+			prepare: func(f *fields) {
+				committedFileNames := map[string]bool{}
+
+				// одна транзакция: только загрузка чекпоинта.
+				// StreamFlow падает в середине потока — до SiftTraffic и
+				// записи чекпоинта дело не доходит
+				f.ri.SessionManager.EXPECT().CreateSession().Return(f.ts).Times(1)
+				f.ts.EXPECT().Start(gomock.Any()).Return(nil).Times(1)
+				f.ts.EXPECT().Rollback().Return(nil).Times(1)
+
+				gomock.InOrder(
+					f.ri.MockRepository.FlowBatch.EXPECT().
+						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(func(_ string, _ map[string]bool, onLine func(line string) error) (
+							[]string, int, error) {
+							lines := strings.Split(flowStr, "\n")
+
+							// пара строк успешно учтена аккумулятором,
+							// затем поток обрывается ошибкой ввода-вывода
+							if err := onLine(lines[0]); err != nil {
+								return nil, 0, err
+							}
+							if err := onLine(lines[1]); err != nil {
+								return nil, 0, err
+							}
+
+							return nil, 0, errors.New("ошибка чтения flow в середине потока")
+						}),
+				)
+
+				// SiftTraffic / SaveChunkList / RemoveOld / RemoveByNasIP не ожидаются:
+				// обработка nas_ip прерывается сразу после ошибки StreamFlow
 			},
 			args: args{
 				ctx:         context.Background(),
@@ -486,17 +611,27 @@ func TestAggregate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			f := fields{
-				ri: rimport.NewTestRepositoryImports(ctrl),
-				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
+				ri:      rimport.NewTestRepositoryImports(ctrl),
+				ts:      transaction.NewMockSession(ctrl),
+				flow:    usecase.NewMockFlowStreamer(ctrl),
+				session: usecase.NewMockSessionLoader(ctrl),
+				channel: usecase.NewMockChannelLoader(ctrl),
+				traffic: usecase.NewMockTrafficProcessor(ctrl),
 			}
+			f.realTraffic = newTestTrafficUsecase(t, f.ri.RepositoryImports())
 			if tt.prepare != nil {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), nil)
+			u := usecase.NewAggregatorUsecase(testLogger, f.ri.RepositoryImports(),
+				usecase.AggregatorDeps{
+					Flow:    f.flow,
+					Session: f.session,
+					Channel: f.channel,
+					Traffic: f.traffic,
+				}, metrics.Nop())
 
-			ui.Usecase.Aggregator.Aggregate(tt.args.ctx, tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
+			u.Aggregate(tt.args.ctx, tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
 		})
 	}
 }
@@ -528,9 +663,14 @@ func requireMetricLine(t *testing.T, body, want string) {
 
 func TestAggregateMetrics(t *testing.T) {
 	type fields struct {
-		ri rimport.TestRepositoryImports
-		bi *bimport.TestBridgeImports
-		ts *transaction.MockSession
+		ri      rimport.TestRepositoryImports
+		ts      *transaction.MockSession
+		flow    *usecase.MockFlowStreamer
+		session *usecase.MockSessionLoader
+		channel *usecase.MockChannelLoader
+		traffic *usecase.MockTrafficProcessor
+		// realTraffic источник живого FlowAccumulator для мока TrafficProcessor
+		realTraffic *usecase.TrafficUsecase
 	}
 
 	const (
@@ -541,14 +681,19 @@ func TestAggregateMetrics(t *testing.T) {
 	)
 
 	flowStr := "132,127.0.0.1,127.0.0.2"
+	brokenFlow := "notanumber,127.0.0.1,127.0.0.2"
 
 	channelMap := map[channel.ID]bool{
 		channel.Internal: true,
 		channel.External: false,
 	}
+	// одна строка internal→internal: получателю download, отправителю upload
 	trafficMap := map[session.IP]map[channel.ID]traffic.Traffic{
 		ip1: {
-			channel.Internal: {Download: 366, Upload: 801},
+			channel.Internal: {Download: 132},
+		},
+		"127.0.0.2": {
+			channel.Internal: {Upload: 132},
 		},
 	}
 	sessionList := []session.OnlineSession{
@@ -576,11 +721,11 @@ func TestAggregateMetrics(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(trafficMap, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(flowStr, fileNameList)),
+					f.traffic.EXPECT().
 						SiftTraffic(channelMap, trafficMap, sessionList).Return(chunkList, nil),
 					f.ri.MockRepository.Session.EXPECT().SaveChunkList(gomock.Any(), f.ts, chunkList).Return(nil),
 					f.ri.MockRepository.FlowBatch.EXPECT().
@@ -596,7 +741,7 @@ func TestAggregateMetrics(t *testing.T) {
 				`aggregator_chunks_saved_total 1`,
 				`aggregator_accounted_traffic_bytes_total{direction="download"} 64`,
 				`aggregator_accounted_traffic_bytes_total{direction="upload"} 2`,
-				`aggregator_nas_phase_duration_seconds_count{phase="prepare_flow"} 1`,
+				`aggregator_nas_phase_duration_seconds_count{phase="stream_flow"} 1`,
 				`aggregator_nas_phase_duration_seconds_count{phase="save_chunks"} 1`,
 				`aggregator_flow_size_bytes_count 1`,
 			},
@@ -614,10 +759,10 @@ func TestAggregateMetrics(t *testing.T) {
 				gomock.InOrder(
 					f.ri.MockRepository.FlowBatch.EXPECT().
 						LoadCommittedFileNames(gomock.Any(), f.ts, nasIP).Return(committedFileNames, nil),
-					f.bi.TestBridge.Flow.EXPECT().
-						PrepareFlow(nasIP, committedFileNames).Return(flowStr, fileNameList, nil),
-					f.bi.TestBridge.Traffic.EXPECT().
-						ParseFlow(channelMap, flowStr).Return(nil, global.ErrInternalError),
+					f.traffic.EXPECT().NewFlowAccumulator(channelMap).
+						Return(f.realTraffic.NewFlowAccumulator(channelMap)),
+					f.flow.EXPECT().StreamFlow(nasIP, committedFileNames, gomock.Any()).
+						DoAndReturn(streamLines(brokenFlow, fileNameList)),
 				)
 			},
 			want: []string{
@@ -634,17 +779,27 @@ func TestAggregateMetrics(t *testing.T) {
 			defer ctrl.Finish()
 
 			f := fields{
-				ri: rimport.NewTestRepositoryImports(ctrl),
-				ts: transaction.NewMockSession(ctrl),
-				bi: bimport.NewTestBridgeImports(ctrl),
+				ri:      rimport.NewTestRepositoryImports(ctrl),
+				ts:      transaction.NewMockSession(ctrl),
+				flow:    usecase.NewMockFlowStreamer(ctrl),
+				session: usecase.NewMockSessionLoader(ctrl),
+				channel: usecase.NewMockChannelLoader(ctrl),
+				traffic: usecase.NewMockTrafficProcessor(ctrl),
 			}
+			f.realTraffic = newTestTrafficUsecase(t, f.ri.RepositoryImports())
 			tt.prepare(&f)
 
 			m := metrics.New(testLogger, "test", nil)
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), f.bi.BridgeImports(), m)
+			u := usecase.NewAggregatorUsecase(testLogger, f.ri.RepositoryImports(),
+				usecase.AggregatorDeps{
+					Flow:    f.flow,
+					Session: f.session,
+					Channel: f.channel,
+					Traffic: f.traffic,
+				}, m)
 
-			ui.Usecase.Aggregator.Aggregate(context.Background(), nasIP, sessionList, channelMap)
+			u.Aggregate(context.Background(), nasIP, sessionList, channelMap)
 
 			body := scrapeMetrics(t, m)
 
