@@ -28,8 +28,8 @@ test-unit: ## юнит-тесты usecase, tools и config
 test-storage: ## тесты файлового репозитория
 	cd $(SRC) && $(GOTEST) ./internal/repository/storage/test/...
 
-test-pg: db-up ## интеграционные тесты postgresql репозитория (нужен docker)
-	cd $(SRC) && $(GOTEST) ./internal/repository/postgresql/test/...
+test-pg: db-up ## интеграционные тесты postgresql репозитория и transaction (нужен docker)
+	cd $(SRC) && $(GOTEST) ./internal/repository/postgresql/test/... ./internal/transaction/test/...
 
 test: test-unit test-storage test-pg ## все тесты подряд
 
