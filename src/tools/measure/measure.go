@@ -59,14 +59,16 @@ func (m *measure) Stop(name string) (elapsed time.Duration) {
 	return elapsed
 }
 
-var measureEnable = os.Getenv("MEASURE") == "enable"
-
 const maxResultCount = 5
 
 func (m *measure) Result() (total time.Duration) {
-	if !measureEnable {
+	if os.Getenv("MEASURE") != "enable" {
 		return total
 	}
+
+	m.s.Lock()
+	defer m.s.Unlock()
+
 	m.writer.Write("--------------------------------")
 	m.writer.Write("Результаты замеров:")
 	m.writer.Write("--------------------------------")
