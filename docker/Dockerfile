@@ -1,6 +1,6 @@
 FROM golang:1.27.0 AS build-env
 ARG NAME
-ENV BASE_PATH "/go/src/${NAME}"
+ENV BASE_PATH="/go/src/${NAME}"
 
 COPY src ${BASE_PATH}
 WORKDIR ${BASE_PATH}
@@ -13,7 +13,7 @@ go build -o ${NAME} .
 
 FROM ubuntu:26.04
 ARG NAME
-ENV BASE_PATH "/go/src/${NAME}"
+ENV BASE_PATH="/go/src/${NAME}"
 
 ENV TZ="Asia/Tashkent"
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,21 +27,18 @@ RUN  apt-get update -qq \
     dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*;
 
-ENV BIN_PATH "/go/src/${NAME}"
-ENV CONF_PATH "conf.yaml"
-ENV FLOW_DIR "flow"
-ENV SUBNET_DISABLED_DIR "subnet-disabled"
+ENV BIN_PATH="/go/src/${NAME}"
+ENV CONF_PATH="conf.yaml"
+ENV FLOW_DIR="flow"
+ENV SUBNET_DISABLED_DIR="subnet-disabled"
 
 # служебный http сервер: метрики и health-пробы
 EXPOSE 2112
 
-COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /app/${NAME}
+COPY --from=build-env ${BASE_PATH}/cmd/${NAME} /app/aggregator
 
 WORKDIR /app
 VOLUME ["/app/flow"]
 VOLUME ["/app/subnet-disabled"]
 
-ARG NAME
-ENV NAME_BIN=$NAME
-
-CMD "/app/${NAME_BIN}"
+CMD ["/app/aggregator"]
