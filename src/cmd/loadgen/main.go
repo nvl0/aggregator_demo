@@ -196,7 +196,7 @@ func runCycle(conf config.Config, log *slog.Logger) (elapsed time.Duration, err 
 	}
 
 	ri := rimport.NewRepositoryImports(conf, transaction.NewSQLSessionManager(pgDB))
-	ui := uimport.NewUsecaseImports(log, ri, nil)
+	ui := uimport.NewUsecaseImports(log, ri, nil, nil)
 
 	start := time.Now()
 	ui.Usecase.Aggregator.Start(context.Background())

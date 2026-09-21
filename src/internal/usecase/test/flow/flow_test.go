@@ -122,7 +122,7 @@ func TestStreamFlow(t *testing.T) {
 				tt.prepare(&f)
 			}
 
-			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil)
+			ui := uimport.NewUsecaseImports(testLogger, f.ri.RepositoryImports(), nil, nil)
 
 			var gotLines []string
 

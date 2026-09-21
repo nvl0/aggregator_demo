@@ -71,6 +71,37 @@ func TestMetricsAddr(t *testing.T) {
 	}
 }
 
+// TestTracingEndpoint endpoint otlp-коллектора берется из env, дефолт пуст (трейсинг выключен)
+func TestTracingEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want string
+	}{
+		{
+			name: "env пуст, трейсинг выключен",
+			env:  "",
+			want: "",
+		},
+		{
+			name: "env задает endpoint",
+			env:  "127.0.0.1:4318",
+			want: "127.0.0.1:4318",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TRACING_ENDPOINT", tt.env)
+
+			c := config.Config{}
+			if got := c.TracingEndpoint(); got != tt.want {
+				t.Errorf("TracingEndpoint() = %q, ожидалось %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPostgresURL строка подключения собирается из conf.yaml и переопределяется env
 func TestPostgresURL(t *testing.T) {
 	tests := []struct {

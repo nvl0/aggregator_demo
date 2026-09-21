@@ -13,6 +13,7 @@ import (
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/subnetrange"
+	"aggregator/src/tools/tracing"
 )
 
 type UsecaseImports struct {
@@ -25,10 +26,16 @@ func NewUsecaseImports(
 	log *slog.Logger,
 	ri rimport.RepositoryImports,
 	m *metrics.Metrics,
+	tr *tracing.Tracer,
 ) UsecaseImports {
 	// метрики не переданы (тесты, loadgen): пишем в выброшенный реестр
 	if m == nil {
 		m = metrics.Nop()
+	}
+
+	// трейсер не передан (тесты, loadgen): используем no-op
+	if tr == nil {
+		tr = tracing.Nop()
 	}
 
 	// создание блока исключенных из подсчета адресов
@@ -54,7 +61,7 @@ func NewUsecaseImports(
 			Session: sessionUsecase,
 			Channel: channelUsecase,
 			Traffic: trafficUsecase,
-		}, m)
+		}, m, tr)
 
 	return UsecaseImports{
 		Config:         ri.Config,

@@ -18,7 +18,12 @@ import (
 	"aggregator/src/tools/flowgen"
 	"aggregator/src/tools/measure"
 	"aggregator/src/tools/metrics"
+	"aggregator/src/tools/tracing"
 	"aggregator/src/tools/workerpool"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -31,6 +36,7 @@ const (
 type AggregatorUsecase struct {
 	measure measure.Measure
 	metrics *metrics.Metrics
+	tracer  *tracing.Tracer
 	log     *slog.Logger
 	// poolSize размер пула воркеров агрегации
 	poolSize int
@@ -57,6 +63,7 @@ func NewAggregatorUsecase(
 	ri rimport.RepositoryImports,
 	deps AggregatorDeps,
 	m *metrics.Metrics,
+	tr *tracing.Tracer,
 ) *AggregatorUsecase {
 	writer := measure.NewSlogWriter(log)
 	// msr, а не m: имя m занято метриками
@@ -65,6 +72,7 @@ func NewAggregatorUsecase(
 	u := &AggregatorUsecase{
 		measure:           msr,
 		metrics:           m,
+		tracer:            tr,
 		log:               log,
 		poolSize:          ri.Config.WorkerPoolSize(),
 		flow:              deps.Flow,
@@ -83,6 +91,9 @@ var fgen = os.Getenv("FLOWGEN") == "true"
 
 // Start запуск агрегатора
 func (u *AggregatorUsecase) Start(ctx context.Context) {
+	ctx, span := u.tracer.Start(ctx, "aggregator.cycle")
+	defer span.End()
+
 	cycleStart := time.Now()
 	cycleOK := false
 
@@ -271,6 +282,10 @@ func (u *AggregatorUsecase) Aggregate(
 	sessionList []session.OnlineSession,
 	channelMap map[channel.ID]bool,
 ) {
+	ctx, span := u.tracer.Start(ctx, "aggregator.nas")
+	span.SetAttributes(attribute.String(logFieldNasIP, nasIP))
+	defer span.End()
+
 	writer := measure.NewSlogWriter(u.log)
 	m := measure.NewMeasure(writer)
 
@@ -279,7 +294,7 @@ func (u *AggregatorUsecase) Aggregate(
 	// имена flow файлов, чанки которых уже закоммичены в одном из предыдущих циклов
 	committedFileNames, err := u.loadCommittedFileNames(ctx, nasIP)
 	if err != nil {
-		u.nasFailed(metrics.NASStageCheckpoint)
+		u.nasFailed(span, metrics.NASStageCheckpoint, err)
 
 		return
 	}
@@ -291,7 +306,7 @@ func (u *AggregatorUsecase) Aggregate(
 	// streamFlow фиксирует длительность фазы, в том числе на ошибке
 	fileNameList, flowSize, err := u.streamFlow(nasIP, committedFileNames, acc.AccumulateLine)
 	if err != nil {
-		u.nasFailed(metrics.NASStagePrepare)
+		u.nasFailed(span, metrics.NASStagePrepare, err)
 
 		return
 	}
@@ -352,11 +367,11 @@ func (u *AggregatorUsecase) Aggregate(
 		u.removeOldFlow(ctx, nasIP)
 		m.Result()
 
-		u.nasFailed(metrics.NASStageSift)
+		u.nasFailed(span, metrics.NASStageSift, err)
 
 		return
 	case err != nil:
-		u.nasFailed(metrics.NASStageSift)
+		u.nasFailed(span, metrics.NASStageSift, err)
 
 		return
 	}
@@ -369,7 +384,7 @@ func (u *AggregatorUsecase) Aggregate(
 	saveChunkListLogName := fmt.Sprintf("%s сохранение чанков и чекпоинта в бд", nasIP)
 	m.Start(saveChunkListLogName)
 
-	if err = u.commitChunks(ctx, nasIP, chunkList, fileNameList); err != nil {
+	if err = u.commitChunks(ctx, span, nasIP, chunkList, fileNameList); err != nil {
 		return
 	}
 	m.Stop(saveChunkListLogName)
@@ -382,10 +397,14 @@ func (u *AggregatorUsecase) Aggregate(
 	m.Result()
 }
 
-// nasFailed фиксация неуспешной обработки nas_ip на этапе stage
-func (u *AggregatorUsecase) nasFailed(stage metrics.NASStage) {
+// nasFailed фиксация неуспешной обработки nas_ip на этапе stage:
+// метрики, плюс запись ошибки в спан текущего nas_ip
+func (u *AggregatorUsecase) nasFailed(span trace.Span, stage metrics.NASStage, err error) {
 	u.metrics.IncNASError(stage)
 	u.metrics.IncNAS(metrics.NASResultError)
+
+	span.RecordError(err)
+	span.SetStatus(codes.Error, string(stage))
 }
 
 // streamFlow потоковый разбор flow с фиксацией длительности фазы.
@@ -405,6 +424,7 @@ func (u *AggregatorUsecase) streamFlow(
 // commitChunks сохранение чанков с фиксацией метрик этапа
 func (u *AggregatorUsecase) commitChunks(
 	ctx context.Context,
+	span trace.Span,
 	nasIP string,
 	chunkList []session.Chunk,
 	fileNameList []string,
@@ -414,7 +434,7 @@ func (u *AggregatorUsecase) commitChunks(
 	u.metrics.ObserveNASPhase(metrics.NASPhaseSaveChunks, time.Since(start))
 
 	if err != nil {
-		u.nasFailed(metrics.NASStageSave)
+		u.nasFailed(span, metrics.NASStageSave, err)
 	}
 
 	return err

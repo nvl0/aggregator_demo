@@ -18,6 +18,7 @@ import (
 	"aggregator/src/rimport"
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
+	"aggregator/src/tools/tracing"
 
 	"github.com/yl2chen/cidranger"
 	"go.uber.org/mock/gomock"
@@ -225,7 +226,7 @@ func TestStart(t *testing.T) {
 					Session: f.session,
 					Channel: f.channel,
 					Traffic: f.traffic,
-				}, metrics.Nop())
+				}, metrics.Nop(), tracing.Nop())
 
 			u.Start(tt.args.ctx)
 		})
@@ -629,7 +630,7 @@ also-broken,127.0.0.2,127.0.0.1`
 					Session: f.session,
 					Channel: f.channel,
 					Traffic: f.traffic,
-				}, metrics.Nop())
+				}, metrics.Nop(), tracing.Nop())
 
 			u.Aggregate(tt.args.ctx, tt.args.nasIP, tt.args.sessionList, tt.args.channelMap)
 		})
@@ -797,7 +798,7 @@ func TestAggregateMetrics(t *testing.T) {
 					Session: f.session,
 					Channel: f.channel,
 					Traffic: f.traffic,
-				}, m)
+				}, m, tracing.Nop())
 
 			u.Aggregate(context.Background(), nasIP, sessionList, channelMap)
 

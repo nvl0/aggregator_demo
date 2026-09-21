@@ -31,7 +31,7 @@ func TestRunStopsOnContextCancel(t *testing.T) {
 	defer ctrl.Finish()
 
 	ri := rimport.NewTestRepositoryImports(ctrl)
-	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil)
+	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -102,7 +102,7 @@ func TestCancelDuringCycleStopsDispatch(t *testing.T) {
 			return nil, errors.New("обработка nas_ip остановлена тестом")
 		})
 
-	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil)
+	ui := uimport.NewUsecaseImports(testLogger, ri.RepositoryImports(), nil, nil)
 	c := external.NewCron(testLogger, ui)
 
 	done := make(chan struct{})

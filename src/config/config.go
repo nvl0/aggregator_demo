@@ -100,3 +100,10 @@ func (c *Config) MetricsAddr() string {
 
 	return defaultMetricsAddr
 }
+
+// TracingEndpoint адрес otlp-коллектора трейсов.
+// Задается только переменной окружения TRACING_ENDPOINT, в conf.yaml ключа нет.
+// Пустое значение выключает трейсинг
+func (c *Config) TracingEndpoint() string {
+	return os.Getenv("TRACING_ENDPOINT")
+}

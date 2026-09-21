@@ -10,6 +10,7 @@ import (
 	"aggregator/src/tools/logger"
 	"aggregator/src/tools/metrics"
 	"aggregator/src/tools/pgdb"
+	"aggregator/src/tools/tracing"
 	"aggregator/src/uimport"
 
 	"context"
@@ -18,6 +19,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 var version = os.Getenv("VERSION")
@@ -25,6 +27,9 @@ var version = os.Getenv("VERSION")
 // dbConnReserve резерв соединений с бд под параллельные стартовые запросы
 // и пробу готовности /readyz, которая ходит в бд во время цикла агрегации
 const dbConnReserve = 3
+
+// tracerShutdownTimeout предельное время на выгрузку накопленных спанов при остановке
+const tracerShutdownTimeout = 5 * time.Second
 
 func main() {
 	log := logger.New()
@@ -49,6 +54,17 @@ func main() {
 
 	m := metrics.New(log, version, pgDB.DB)
 
+	tr, tracerShutdown := tracing.New(ctx, log, conf.TracingEndpoint())
+	defer func() {
+		// собственный контекст: ctx уже отменен на этом этапе graceful shutdown
+		sc, cancel := context.WithTimeout(context.Background(), tracerShutdownTimeout)
+		defer cancel()
+
+		if shutdownErr := tracerShutdown(sc); shutdownErr != nil {
+			log.Error("не удалось корректно остановить трейсер, ошибка", "error", shutdownErr)
+		}
+	}()
+
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/healthz", health.Live)
@@ -68,7 +84,7 @@ func main() {
 
 	ri := rimport.NewRepositoryImports(conf, pgSessionManager)
 
-	ui := uimport.NewUsecaseImports(log, ri, m)
+	ui := uimport.NewUsecaseImports(log, ri, m, tr)
 
 	external.NewCron(log, ui).Run(ctx)
 
