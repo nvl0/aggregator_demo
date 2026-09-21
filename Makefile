@@ -13,7 +13,7 @@ export DEBUG ?= true
 GOTEST := go test -race -p 1
 GOLANGCI_VERSION := v2.13.2
 
-.PHONY: help lint test test-unit test-storage test-pg build docker-build docker-up db-up mocks loadgen
+.PHONY: help lint test test-unit test-storage test-pg build docker-build docker-up db-up jaeger-up mocks loadgen
 
 help: ## список таргетов
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-14s %s\n", $$1, $$2}'
@@ -25,7 +25,7 @@ lint: ## golangci-lint по всему модулю (docker, версия как
 test-unit: ## юнит-тесты usecase, tools (кроме gensql/pgdb - им нужен postgres) и config
 	cd $(SRC) && $(GOTEST) ./internal/usecase/test/... ./tools/dump/... ./tools/flowgen/... \
 		./tools/logger/... ./tools/measure/... ./tools/metrics/... ./tools/sqlnull/... \
-		./tools/subnetrange/... ./tools/workerpool/... ./external/... ./config/...
+		./tools/subnetrange/... ./tools/tracing/... ./tools/workerpool/... ./external/... ./config/...
 
 test-storage: ## тесты файлового репозитория
 	cd $(SRC) && $(GOTEST) ./internal/repository/storage/test/...
@@ -47,6 +47,9 @@ docker-up: ## поднять весь стек (db + migrate + core)
 
 db-up: ## поднять только бд и накатить миграции
 	docker compose -p aggregator -f $(CURDIR)/docker/docker-compose.yaml up -d db migrate
+
+jaeger-up: ## поднять jaeger (UI localhost:16686, OTLP/HTTP :4318)
+	docker compose -p aggregator -f $(CURDIR)/docker/docker-compose.yaml up -d jaeger
 
 mocks: ## регенерация моков
 	cd $(SCRIPTS) && ./mocks_creator.sh
