@@ -22,14 +22,17 @@ lint: ## golangci-lint по всему модулю (docker, версия как
 	docker run --rm -v $(CURDIR):/app -w /app/src \
 		golangci/golangci-lint:$(GOLANGCI_VERSION) golangci-lint run
 
-test-unit: ## юнит-тесты usecase, tools и config
-	cd $(SRC) && $(GOTEST) ./internal/usecase/test/... ./tools/... ./external/... ./config/...
+test-unit: ## юнит-тесты usecase, tools (кроме gensql/pgdb - им нужен postgres) и config
+	cd $(SRC) && $(GOTEST) ./internal/usecase/test/... ./tools/dump/... ./tools/flowgen/... \
+		./tools/logger/... ./tools/measure/... ./tools/metrics/... ./tools/sqlnull/... \
+		./tools/subnetrange/... ./tools/workerpool/... ./external/... ./config/...
 
 test-storage: ## тесты файлового репозитория
 	cd $(SRC) && $(GOTEST) ./internal/repository/storage/test/...
 
-test-pg: db-up ## интеграционные тесты postgresql репозитория и transaction (нужен docker)
-	cd $(SRC) && $(GOTEST) ./internal/repository/postgresql/test/... ./internal/transaction/test/...
+test-pg: db-up ## интеграционные тесты postgresql репозитория, transaction, tools/gensql и tools/pgdb (нужен docker)
+	cd $(SRC) && $(GOTEST) ./internal/repository/postgresql/test/... ./internal/transaction/test/... \
+		./tools/gensql/... ./tools/pgdb/...
 
 test: test-unit test-storage test-pg ## все тесты подряд
 
