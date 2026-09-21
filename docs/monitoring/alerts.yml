@@ -1,0 +1,66 @@
+# Пример правил алертинга Prometheus для aggregator.
+#
+# Метрики публикуются на /metrics (см. src/tools/metrics), цикл агрегации
+# запускается раз в internal/entity/global.StartDur = 60s.
+#
+# job="aggregator" — замените на реальный label_name job из вашего
+# prometheus.yml scrape_config, если он называется иначе.
+groups:
+  - name: aggregator
+    rules:
+      - alert: AggregatorDown
+        expr: up{job="aggregator"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Инстанс aggregator недоступен для scrape"
+          description: >-
+            Prometheus не может собрать метрики с {{ $labels.instance }}
+            дольше 5 минут.
+
+      - alert: AggregatorCycleStale
+        expr: time() - aggregator_last_success_timestamp_seconds > 300
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Цикл агрегации не завершался успешно больше 5 минут"
+          description: >-
+            aggregator_last_success_timestamp_seconds не обновлялся дольше
+            5 циклов подряд (цикл раз в 60s) на {{ $labels.instance }}.
+
+      - alert: AggregatorCycleErrors
+        expr: increase(aggregator_cycle_errors_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ранние выходы цикла агрегации по причине {{ $labels.reason }}"
+          description: >-
+            За последние 15 минут на {{ $labels.instance }} были ранние
+            выходы цикла (reason={{ $labels.reason }}).
+
+      - alert: AggregatorNASErrorRateHigh
+        expr: >-
+          sum by (instance) (rate(aggregator_nas_errors_total[15m]))
+          /
+          sum by (instance) (rate(aggregator_nas_processed_total[15m]))
+          > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая доля ошибок обработки nas_ip"
+          description: >-
+            Больше 10% nas_ip за последние 15 минут завершились ошибкой
+            на {{ $labels.instance }}.
+
+      - alert: AggregatorWorkerPanics
+        expr: increase(aggregator_worker_panics_total[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Паника воркера агрегации"
+          description: >-
+            За последние 15 минут на {{ $labels.instance }} зафиксирована
+            паника воркера в пуле агрегации.
