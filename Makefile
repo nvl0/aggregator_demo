@@ -13,7 +13,7 @@ export DEBUG ?= true
 GOTEST := go test -race -p 1
 GOLANGCI_VERSION := v2.13.2
 
-.PHONY: help lint test test-unit test-storage test-pg build docker-build docker-up db-up jaeger-up mocks loadgen
+.PHONY: help lint test test-unit test-storage test-pg test-e2e build docker-build docker-up db-up jaeger-up mocks loadgen
 
 help: ## список таргетов
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-14s %s\n", $$1, $$2}'
@@ -34,7 +34,10 @@ test-pg: db-up ## интеграционные тесты postgresql репоз�
 	cd $(SRC) && $(GOTEST) ./internal/repository/postgresql/test/... ./internal/transaction/test/... \
 		./tools/gensql/... ./tools/pgdb/...
 
-test: test-unit test-storage test-pg ## все тесты подряд
+test-e2e: db-up ## e2e-тест собранного бинаря целиком: cron, http, graceful shutdown (нужен docker)
+	cd $(SRC) && $(GOTEST) ./cmd/test/e2e/...
+
+test: test-unit test-storage test-pg test-e2e ## все тесты подряд
 
 build: ## сборка бинарника в bin/
 	cd $(SRC)/cmd && go build -o $(CURDIR)/bin/aggregator .
