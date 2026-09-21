@@ -15,10 +15,10 @@ func newHandler(w io.Writer) slog.Handler {
 		level = slog.LevelDebug
 	}
 
-	return slog.NewJSONHandler(w, &slog.HandlerOptions{
+	return traceHandler{Handler: slog.NewJSONHandler(w, &slog.HandlerOptions{
 		AddSource: true,
 		Level:     level,
-	})
+	})}
 }
 
 // New основной логгер приложения: JSON в stdout, с source, уровень по DEBUG
